@@ -44,15 +44,17 @@
         <url>https://repo.opencollab.dev/maven-snapshots</url>
 
     </repository>
+             <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
     </repositories>
 
     <dependencies>
         <dependency>
-    <groupId>com.creadoresprogram.mbnukkit</groupId>
+    <groupId>com.github.Trollhunters501</groupId>
     <artifactId>MBNukkit</artifactId>
-    <version>1.0</version>
-    <scope>system</scope>
-    <systemPath>${project.basedir}/lib/nukkit.jar</systemPath>
+    <version>1.0.1</version>
 </dependency>
 
     </dependencies>
