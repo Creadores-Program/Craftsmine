@@ -52,9 +52,9 @@
 
     <dependencies>
         <dependency>
-    <groupId>com.github.Trollhunters501</groupId>
-    <artifactId>MBNukkit</artifactId>
-    <version>1.0.1</version>
+    <groupId>cn.nukkit</groupId>
+    <artifactId>magmablock</artifactId>
+    <version>1.0.0</version>
 </dependency>
              <dependency>
             <groupId>org.cloudburstmc.protocol</groupId>
