@@ -55,6 +55,8 @@
     <groupId>cn.nukkit</groupId>
     <artifactId>magmablock</artifactId>
     <version>1.0.0</version>
+                 <scope>system</scope>
+    <systemPath>${project.basedir}/libs/server.jar</systemPath>
 </dependency>
              <dependency>
             <groupId>org.cloudburstmc.protocol</groupId>
