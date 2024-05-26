@@ -56,7 +56,7 @@
     <artifactId>magmablock</artifactId>
     <version>1.0.0</version>
                  <scope>system</scope>
-    <systemPath>${project.basedir}/libs/server.jar</systemPath>
+                 <systemPath>${project.basedir}/libs/server.jar</systemPath>
 </dependency>
              <dependency>
             <groupId>org.cloudburstmc.protocol</groupId>
@@ -81,6 +81,24 @@
             </resource>
         </resources>
         <plugins>
+                 <plugin>
+    <groupId>com.googlecode.maven-download-plugin</groupId>
+    <artifactId>download-maven-plugin</artifactId>
+    <version>1.4.2</version>
+    <executions>
+        <execution>
+            <id>install-jbpm</id>
+            <phase>compile</phase>
+            <goals>
+                <goal>wget</goal>
+            </goals>
+            <configuration>
+                <url>https://github.com/Trollhunters501/MBNukkit/releases/download/1.0.1/server.jar</url>
+                <outputDirectory>${project.build.directory}/libs</outputDirectory>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
             <plugin>
                 <groupId>pl.project13.maven</groupId>
                 <artifactId>git-commit-id-plugin</artifactId>
