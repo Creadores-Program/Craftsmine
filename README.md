@@ -5,7 +5,7 @@ Le permite unirse a servidores actuales con Minecraft Bedrock 0.15.10 (Craftsman
 
 ## Selecciona tu Idioma/Select your language:
   - [Español](https://github.com/Trollhunters501/Craftsmine/blob/main/Espa%C3%B1ol/LEAME.md)
-  - [English]()
+  - [English](https://github.com/Trollhunters501/Craftsmine/blob/main/English/README.md)
   - [Português]()
   - [中国人]()
   - [Русский]()
