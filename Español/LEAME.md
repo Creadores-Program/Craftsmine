@@ -3,7 +3,7 @@ Bienvenido a este proyecto que ha hecho lo imposible 😉! Imagínate un servido
 
 Muchos me decían que era imposible pero ya me conocen así que accepte el reto y aquí estoy!
 
-**ESTE ES EL PRIMER SOFTWARE QUE HACE QUE LOS JUGADORES DE MINECRAFT POCKET(0.15.x) ENTREN A SERVIDORES MINECRAFT BEDROCK!!**
+**ESTE ES EL PRIMER SOFTWARE QUE HACE QUE LOS JUGADORES DE MINECRAFT POCKET(0.15.x) ENTREN A SERVIDORES MINECRAFT BEDROCK(1.7.0)!!**
 
 ## Requisitos:
 Tener instalado Java8 o superior.
@@ -52,12 +52,13 @@ aquí les dejo una lista de cosas que funcionan en este **Software**!
   - ❌ Entidades (incluyendo jugadores)
   - ❌ Inventario
   - ❌ Niveles
-  - ❌ Soporte Multiversion
   - ❌ UI/Forms
   Y más...
 
 ## Como instalar:
 Simplemente coloque el archivo jar como inicializador del programa por ejemplo en un panel Pterodactyl simplemente pongalo en el directorio principal y renombre a **server.jar** o como se llame el archivo jar que **inicia el servidor**! recuerda que el programa está escrito en **Java**!
+
+Para que el jugador de Minecraft pocket se una con jugadores de Minecraft bedrock 1.21 o la versión actual puedes usar [Nukkit PetteriM1 Edition](https://github.com/PetteriM1/NukkitPetteriM1Edition/)
 
 ## Créditos:
 
