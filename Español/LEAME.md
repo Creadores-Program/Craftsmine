@@ -53,6 +53,7 @@ aquí les dejo una lista de cosas que funcionan en este **Software**!
   - ❌ Inventario
   - ❌ Niveles
   - ❌ UI/Forms
+
   Y más...
 
 ## Como instalar:
