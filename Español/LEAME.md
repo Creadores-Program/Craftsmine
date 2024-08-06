@@ -46,6 +46,7 @@ aquí les dejo una lista de cosas que funcionan en este **Software**!
   - ❕ Vida del Jugador
   - ❕ Hambre del Jugador
   - ❕ Respawn
+  - ❕ Multi Mundo
   - ❌ Xbox auth
   - ❌ Generación de terreno
   - ❌ Movimiento
