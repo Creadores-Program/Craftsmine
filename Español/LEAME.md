@@ -20,6 +20,15 @@ Esto es un **SOFTWARE** No es un **plugin** de ningún software de servidor de M
 ## Como lo Consigo?
 Simplemente entrando a nuestro [Discord](https://discord.com/invite/mrmHcwxXff) y a un precio **accesible** y **Negociable**! no esperes más!
 
+## Como Funciona?
+Este proxy traduce los datapacks de Minecraft pocket a Minecraft Bedrock y viceversa algo así:
+
+MCPE->CraftsMine Proxy Traductor->Servidor Minecraft bedrock.
+
+Servidor Minecraft bedrock->CraftsMine Proxy Traductor->MCPE
+
+**Recuerda que este Software envia al jugador de Minecraft pocket como Minecraft bedrock 1.7!**
+
 ## Que Cosas Funcionan?
 aquí les dejo una lista de cosas que funcionan en este **Software**!
 
