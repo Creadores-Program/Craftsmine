@@ -1,1 +1,1 @@
-# CraftsMine (WIP)
+# CraftsMine (TEP)
