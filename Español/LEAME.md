@@ -84,35 +84,40 @@ Para que el jugador de Minecraft pocket se una con jugadores de Minecraft bedroc
 ## Configuración:
 La configuración está en el directorio principal del servidor es el archivo config.yml (recuerda encender el servidor y apagar para que se genere la configuración!)
 
-### bindAddress
+#### bindAddress
 Es la IP donde se abre el servidor CraftsMine (la mayoría de veces no es necesario modificar)
 
-### port
+#### port
 Es el puerto donde se abre el servidor CraftsMine
 
-### motd
+#### motd
 Es el mensaje del día que mostrara el servidor CraftsMine
 
-### submotd
+#### submotd
 Es el sub mensaje del día que parece abajo del motd cuando esta en lan CraftsMine
 
-### maxplayers
+#### maxplayers
 Es el número máximo de jugadores que accepta el servidor CraftsMine
 
-### shutdownMessage
+#### shutdownMessage
 Es el mensaje que muestra al apagar el proxy
 
-### bedrockAddress
+#### bedrockAddress
 Es el ip del servidor de destino Minecraft bedrock
 
-### bedrockPort
+#### bedrockPort
 Es el puerto del servidor de destino Minecraft bedrock
 
-### debug
+#### debug
 Si está activado envia mensajes de debug a la consola
 
-### gcCollectionDiconnectPlayer
+#### gcCollectionDiconnectPlayer
 Si está activado libera memoria cada vez que un jugador se desconecta del servidor
+
+## Apoyar al proyecto
+
+Si quieres apoyar el proyecto puedes hacernos una donación en este [link](https://creadoresgames.blogspot.com/p/donaciones.html) por transferencia bancaria o por Paypal!
+Muchas gracias ☺️
 
 ## Créditos:
 
