@@ -81,6 +81,39 @@ Simplemente coloque el archivo jar como inicializador del programa por ejemplo e
 
 Para que el jugador de Minecraft pocket se una con jugadores de Minecraft bedrock 1.21 o la versión actual puedes usar [Nukkit PetteriM1 Edition](https://github.com/PetteriM1/NukkitPetteriM1Edition/)
 
+## Configuración:
+La configuración está en el directorio principal del servidor es el archivo config.yml (recuerda encender el servidor y apagar para que se genere la configuración!)
+
+### bindAddress
+Es la IP donde se abre el servidor CraftsMine (la mayoría de veces no es necesario modificar)
+
+### port
+Es el puerto donde se abre el servidor CraftsMine
+
+### motd
+Es el mensaje del día que mostrara el servidor CraftsMine
+
+### submotd
+Es el sub mensaje del día que parece abajo del motd cuando esta en lan CraftsMine
+
+### maxplayers
+Es el número máximo de jugadores que accepta el servidor CraftsMine
+
+### shutdownMessage
+Es el mensaje que muestra al apagar el proxy
+
+### bedrockAddress
+Es el ip del servidor de destino Minecraft bedrock
+
+### bedrockPort
+Es el puerto del servidor de destino Minecraft bedrock
+
+### debug
+Si está activado envia mensajes de debug a la consola
+
+### gcCollectionDiconnectPlayer
+Si está activado libera memoria cada vez que un jugador se desconecta del servidor
+
 ## Créditos:
 
   - [Barrel CREA Edition](https://github.com/Trollhunters501/Barrel-CREA-Edition/)
