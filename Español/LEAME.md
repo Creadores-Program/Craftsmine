@@ -32,11 +32,15 @@ Servidor Minecraft bedrock->CraftsMine Proxy Traductor->MCPE
 ## Que Cosas Funcionan?
 aquí les dejo una lista de cosas que funcionan en este **Software**!
 
+**----------------------------------**
+
 ✔️ **Funciona Bien**
 
 ❕ **Funciona con Bugs**
 
 ❌ **No Funciona**
+
+**----------------------------------**
 
   - ✔️ Sonidos
   - ✔️ Login de Datapackets de servidor(Apreton de Manos)
