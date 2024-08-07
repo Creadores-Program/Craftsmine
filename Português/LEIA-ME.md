@@ -57,6 +57,7 @@ Aqui está uma lista de coisas que funcionam neste **Software**!
   - ❕ Fome do Jogador
   - ❕ Respawn
   - ❕ Multi Mundo
+  - ❕ PVP
   - ❌ Autenticação Xbox
   - ❌ Geração de Terreno
   - ❌ Movimento
