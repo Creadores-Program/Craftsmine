@@ -57,6 +57,7 @@ Here is a list of things that work in this **Software**!
   - ❕ Player Hunger
   - ❕ Respawn
   - ❕ Multi World
+  - ❕ PVP
   - ❌ Xbox auth
   - ❌ Terrain Generation
   - ❌ Movement
