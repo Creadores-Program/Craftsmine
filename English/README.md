@@ -111,6 +111,9 @@ If enabled, it sends debug messages to the console.
 #### gcCollectionDiconnectPlayer
 If enabled, it frees memory every time a player disconnects from the server.
 
+#### consoleLog
+If enabled, generates a console.log file
+
 ## Support the Project
 
 If you want to support the project, you can make a donation at this [link](https://creadoresgames.blogspot.com/p/donaciones.html) via bank transfer or PayPal!
