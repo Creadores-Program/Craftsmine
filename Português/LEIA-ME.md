@@ -111,6 +111,9 @@ Se ativado, envia mensagens de debug para o console.
 #### gcCollectionDiconnectPlayer
 Se ativado, libera memória toda vez que um jogador se desconecta do servidor.
 
+#### consoleLog
+Se habilitado, gere um arquivo console.log
+
 ## Apoiar o Projeto
 
 Se você quiser apoiar o projeto, pode fazer uma doação neste [link](https://creadoresgames.blogspot.com/p/donaciones.html) via transferência bancária ou PayPal!
