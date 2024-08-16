@@ -118,6 +118,12 @@ Si está activado libera memoria cada vez que un jugador se desconecta del servi
 #### consoleLog
 Si está activado genera un archivo console.log
 
+#### gcCollectionAuto
+Si está activado libera memoria cada ciclo de gcCollectionTime
+
+#### gcCollectionTime
+tiempo en milisegundos para el ciclo de gcCollectionAuto
+
 ## Apoyar al proyecto
 
 Si quieres apoyar el proyecto puedes hacernos una donación en este [link](https://creadoresgames.blogspot.com/p/donaciones.html) por transferencia bancaria o por Paypal!
