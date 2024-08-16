@@ -114,6 +114,12 @@ If enabled, it frees memory every time a player disconnects from the server.
 #### consoleLog
 If enabled, generates a console.log file
 
+#### gcCollectionAuto
+If enabled, frees memory every gcCollectionTime cycle
+
+#### gcCollectionTime
+time in milliseconds for the gcCollectionAuto cycle
+
 ## Support the Project
 
 If you want to support the project, you can make a donation at this [link](https://creadoresgames.blogspot.com/p/donaciones.html) via bank transfer or PayPal!
