@@ -48,6 +48,8 @@ Aqui está uma lista de coisas que funcionam neste **Software**!
   - ✔️ Tempo
   - ✔️ Clima
   - ✔️ Mudança de modo de jogo (Sobrevivência, Criativo, Aventura e Espectador)
+  - ✔️ Placar
+  - ✔️ Barras de chefe
   - ❕ Efeito de Posição
   - ❕ Animações
   - ❕ Partículas
@@ -119,6 +121,15 @@ Se ativado, libera memória a cada ciclo gcCollectionTime
 
 #### gcCollectionTime
 tempo em milissegundos para o ciclo gcCollectionAuto
+
+#### langPlayer
+código de idioma a ser usado para jogadores 0.15.x
+
+#### synchServer
+sincronizar motd e jogadores com o proxy
+
+#### timeSynchServer
+tempo em milissegundos para atualizar o synchServer (também sincronizado quando um jogador entra no proxy)
 
 ## Apoiar o Projeto
 
