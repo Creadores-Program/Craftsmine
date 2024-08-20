@@ -48,6 +48,8 @@ Here is a list of things that work in this **Software**!
   - ✔️ Time
   - ✔️ Weather
   - ✔️ Game mode change (Survival, Creative, Adventure, and Spectator)
+  - ✔️ ScoreBoard
+  - ✔️ Bossbars
   - ❕ Position Effect
   - ❕ Animations
   - ❕ Particles
@@ -119,6 +121,15 @@ If enabled, frees memory every gcCollectionTime cycle
 
 #### gcCollectionTime
 time in milliseconds for the gcCollectionAuto cycle
+
+#### langPlayer
+language code to use for 0.15.x players
+
+#### synchServer
+sync motd and players with proxy
+
+#### timeSynchServer
+time in milliseconds to refresh synchServer(It also syncs when a player enters the proxy)
 
 ## Support the Project
 
