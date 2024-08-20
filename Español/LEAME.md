@@ -74,10 +74,7 @@ aquí les dejo una lista de cosas que funcionan en este **Software**!
   Y más...
 
 ## Versiones Probadas de MCPE:
-
- - MCPE 0.15.10
-
- - MCPE 0.15.9
+  MCPE 0.15.0 hasta MCPE 0.15.10
 
 ## Como instalar:
 Simplemente coloque el archivo jar como inicializador del programa por ejemplo en un panel Pterodactyl simplemente pongalo en el directorio principal y renombre a **server.jar** o como se llame el archivo jar que **inicia el servidor**! recuerda que el programa está escrito en **Java**!
