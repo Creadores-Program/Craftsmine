@@ -140,3 +140,4 @@ Muito obrigado ☺️
   - [MBNukkit](https://github.com/Trollhunters501/MBNukkit/)
   - [DragonProxy](https://github.com/robske110/DragonProxy/)
   - [Protocol Cloudburstmc](https://github.com/CloudburstMC/Protocol/)
+  - [BedrockServerQuery](https://github.com/justin-eckenweber/BedrockServerQuery)
