@@ -128,8 +128,12 @@ código del idioma que se usará para los jugadores de 0.15.x
 
 #### synchServer
 sincronizar motd y jugadores con el proxy
+
 #### timeSynchServer
 tiempo en milisegundos para refrescar el synchServer(también se sincroniza al entrar un jugador al proxy)
+
+#### versionBedrockServer
+escojer versión de Minecraft bedrock (1.7, 1.8, 1.9 o 1.10)
 
 ## Apoyar al proyecto
 
