@@ -129,6 +129,10 @@ sincronizar motd e jogadores com o proxy
 #### timeSynchServer
 tempo em milissegundos para atualizar o synchServer (também sincronizado quando um jogador entra no proxy)
 
+#### versionBedrockServer
+escolha a versão do Minecraft Bedrock (1.7, 1.8, 1.9 ou 1.10)
+
+
 ## Apoiar o Projeto
 
 Se você quiser apoiar o projeto, pode fazer uma doação neste [link](https://creadoresgames.blogspot.com/p/donaciones.html) via transferência bancária ou PayPal!
