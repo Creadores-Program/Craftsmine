@@ -160,7 +160,10 @@ public class Player extends Vector3{
           protected void initSession(BedrockClientSession session){
             bedrockClientSession = session;
             session.setCodec(Server.getInstance().getBedrockPacketCodec());
-            session.setPacketHandler(new BedrockBatchHandler(Player.this));
+            // Wrap existing batch handler with legacy rewriter so packets from server are converted before
+            // reaching the translator.
+            org.cloudburstmc.protocol.bedrock.handler.BedrockPacketHandler batch = new org.CreadoresProgram.CraftsMine.network.BedrockBatchHandler(Player.this);
+            session.setPacketHandler(new org.CreadoresProgram.CraftsMine.network.LegacyPacketRewriter(Player.this, batch));
             RequestNetworkSettingsPacket requestNetworkSettingsPacket = new RequestNetworkSettingsPacket();
             requestNetworkSettingsPacket.setProtocolVersion(Server.getInstance().getBedrockPacketCodec().getProtocolVersion());
             session.sendPacketImmediately(requestNetworkSettingsPacket);

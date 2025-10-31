@@ -182,6 +182,13 @@ public class Server{
         if(object instanceof NbtMap){
           NbtMap blocksTag = (NbtMap) object;
           blockDefinitions = new NbtBlockDefinitionRegistry(blocksTag.getList("blocks", NbtType.COMPOUND));
+          // Initialize runtime palette manager (loads per-version palettes if present and
+          // populates Item.BLOCKS_AVIABLE mappings where possible).
+          try {
+            org.CreadoresProgram.CraftsMine.utils.RuntimePaletteManager.init();
+          } catch (Throwable t) {
+            this.getLogger().warn("RuntimePaletteManager init failed: " + t);
+          }
         }
       }
     } catch(IOException e){

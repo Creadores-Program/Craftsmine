@@ -16,7 +16,30 @@ public class NbtBlockDefinitionRegistry implements DefinitionRegistry<BlockDefin
     public NbtBlockDefinitionRegistry(List<NbtMap> definitions) {
         int counter = 0;
         for (NbtMap definition : definitions) {
-            int runtimeId = counter++;
+            int runtimeId = -1;
+            // Try common keys that may contain the runtime id in different palettes
+            if (definition.containsKey("runtime_id")) {
+                try {
+                    runtimeId = definition.getInt("runtime_id");
+                } catch (Exception ignored) {
+                }
+            }
+            if (runtimeId == -1 && definition.containsKey("runtimeId")) {
+                try {
+                    runtimeId = definition.getInt("runtimeId");
+                } catch (Exception ignored) {
+                }
+            }
+            if (runtimeId == -1 && definition.containsKey("v")) {
+                try {
+                    runtimeId = definition.getInt("v");
+                } catch (Exception ignored) {
+                }
+            }
+            // Fallback: assign incremental id if none provided
+            if (runtimeId == -1) {
+                runtimeId = counter++;
+            }
             this.definitions.put(runtimeId, new NbtBlockDefinition(runtimeId, definition));
         }
     }
@@ -29,6 +52,16 @@ public class NbtBlockDefinitionRegistry implements DefinitionRegistry<BlockDefin
     @Override
     public boolean isRegistered(BlockDefinition definition) {
         return definitions.get(definition.getRuntimeId()) == definition;
+    }
+
+    /**
+     * Expose a simple mapping from runtime id -> underlying NbtMap for external use.
+     * This is a convenience for RuntimePaletteManager to try populating legacy mappings.
+     */
+    public Int2ObjectMap<NbtMap> getRuntimeToDefinitionMap() {
+        Int2ObjectMap<NbtMap> map = new Int2ObjectOpenHashMap<>();
+        this.definitions.forEach((k, v) -> map.put(k, v.definition));
+        return map;
     }
 
     private static class NbtBlockDefinition implements BlockDefinition {
