@@ -3,6 +3,7 @@ package com.craftsmine.nkm.protocol;
 import cn.nukkit.Player;
 import cn.nukkit.Server;
 import cn.nukkit.entity.data.Skin;
+import cn.nukkit.network.protocol.TextPacket;
 import cn.nukkit.network.protocol.v113.ProtocolInfo_v113;
 import com.craftsmine.nkm.network.SessionProtocolRegistry;
 import com.craftsmine.nkm.network.SessionProtocolRegistry.EntitySpawnInfo;
@@ -23,6 +24,11 @@ import java.util.zip.DataFormatException;
 public final class PacketTranslator {
 
     private static final int SPECIAL_CREATIVE_WINDOW = 0x79;
+
+    /** TYPE_SYSTEM en el alambre legado 80..112: valor 5 de la tabla PROTOCOL_81 de MySoft
+     *  (TextPacketTypeIds.php). Esa tabla rige todo 81..132 porque MultiversionEnums elige la
+     *  primera tabla con clave menor o igual al protocolo destino (la siguiente es PROTOCOL_133). */
+    private static final int TEXT_TYPE_SYSTEM_LEGACY_WIRE = 5;
 
     public record InboundResult(byte[] canonicalPacket, boolean suppress) {
         public static InboundResult forward(byte[] canonicalPacket) {
@@ -739,16 +745,36 @@ public final class PacketTranslator {
 
     private static byte[] translateTextOutbound(byte[] payload, LegacyProtocol dst) {
         if (!dst.isBefore90()) {
-            return payload;
+            // 90..112 comparten numeracion y layout de campos con v113; solo degrada TYPE_ANNOUNCEMENT,
+            // invalido para todo destino < 113 (tabla PROTOCOL_81 de MySoft: valor maximo 7).
+            if (payload.length == 0 || payload[0] != TextPacket.TYPE_ANNOUNCEMENT) {
+                return payload;
+            }
+            LegacyStream in = LegacyStream.reader(payload);
+            in.readByte(); // type
+            in.readString(LegacyProtocol.PROTOCOL_113); // source: TYPE_SYSTEM no lo serializa
+            String message = in.readString(LegacyProtocol.PROTOCOL_113);
+            LegacyStream out = LegacyStream.writer(payload.length);
+            out.writeByte(TEXT_TYPE_SYSTEM_LEGACY_WIRE);
+            out.writeString(dst, message);
+            return out.toByteArray();
         }
         LegacyStream in = LegacyStream.reader(payload);
         LegacyStream out = LegacyStream.writer(payload.length + 8);
         int type = in.readByte();
-        out.writeByte(type);
+        // < 90 (anterior a 0.16.0): TYPE_WHISPER y TYPE_ANNOUNCEMENT se degradan a TYPE_SYSTEM
+        // (solo message, sin source). La regla < 113 para TYPE_ANNOUNCEMENT queda subsumida:
+        // todo destino < 90 tambien es < 113.
+        boolean degradeToSystem = type == TextPacket.TYPE_WHISPER || type == TextPacket.TYPE_ANNOUNCEMENT;
+        out.writeByte(degradeToSystem ? TEXT_TYPE_SYSTEM_LEGACY_WIRE : type);
         switch (type) {
             case 1, 7, 8 -> {
-                out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
-                out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                String source = in.readString(LegacyProtocol.PROTOCOL_113);
+                String message = in.readString(LegacyProtocol.PROTOCOL_113);
+                if (type == TextPacket.TYPE_CHAT) { // TYPE_CHAT conserva el source; los degradados lo descartan
+                    out.writeString(dst, source);
+                }
+                out.writeString(dst, message);
             }
             case 3 -> {
                 String message = in.readString(LegacyProtocol.PROTOCOL_113);

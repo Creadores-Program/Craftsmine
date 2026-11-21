@@ -274,6 +274,71 @@ class ProtocolBridgeTest {
     }
 
     @Test
+    void degradesOutboundTextAnnouncementAndWhisperToSystemForLegacyProtocols() {
+        // 1) TYPE_ANNOUNCEMENT hacia 90..112 (< 113): degrada a TYPE_SYSTEM (alambre 5) y descarta el source
+        LegacyStream annV113 = LegacyStream.writer(64);
+        annV113.writeByte(ProtocolInfo_v113.TEXT_PACKET & 0xFF);
+        annV113.writeByte(TextPacket.TYPE_ANNOUNCEMENT);
+        annV113.writeString(LegacyProtocol.PROTOCOL_113, "Servidor");
+        annV113.writeString(LegacyProtocol.PROTOCOL_113, "Mantenimiento a las 22:00");
+        PacketTranslator.OutboundResult ann100 = PacketTranslator.translateOutbound(annV113.toByteArray(), LegacyProtocol.PROTOCOL_100, true);
+        assertFalse(ann100.suppress());
+        LegacyStream ann100r = LegacyStream.reader(ann100.legacyPacket());
+        assertEquals(0x0A, ann100r.readByte()); // TEXT para la familia V1_0_0 (PacketIdMapper initV100Table)
+        assertEquals(5, ann100r.readByte()); // TYPE_SYSTEM = 5 en el alambre 80..112 (tabla PROTOCOL_81 de MySoft)
+        assertEquals("Mantenimiento a las 22:00", ann100r.readString(LegacyProtocol.PROTOCOL_100));
+        assertEquals(0, ann100r.remaining());
+
+        // 2) TYPE_WHISPER hacia 90..112: sin degradacion (la regla de susurros solo aplica < 90), passthrough intacto
+        LegacyStream whisV113 = LegacyStream.writer(64);
+        whisV113.writeByte(ProtocolInfo_v113.TEXT_PACKET & 0xFF);
+        whisV113.writeByte(TextPacket.TYPE_WHISPER);
+        whisV113.writeString(LegacyProtocol.PROTOCOL_113, "Ana");
+        whisV113.writeString(LegacyProtocol.PROTOCOL_113, "hola en privado");
+        PacketTranslator.OutboundResult whis100 = PacketTranslator.translateOutbound(whisV113.toByteArray(), LegacyProtocol.PROTOCOL_100, true);
+        assertFalse(whis100.suppress());
+        LegacyStream whis100r = LegacyStream.reader(whis100.legacyPacket());
+        assertEquals(0x0A, whis100r.readByte());
+        assertEquals(TextPacket.TYPE_WHISPER, whis100r.readByte());
+        assertEquals("Ana", whis100r.readString(LegacyProtocol.PROTOCOL_100));
+        assertEquals("hola en privado", whis100r.readString(LegacyProtocol.PROTOCOL_100));
+        assertEquals(0, whis100r.remaining());
+
+        // 3) TYPE_ANNOUNCEMENT hacia 0.15.x (< 90): degrada a TYPE_SYSTEM con string corto y sin source
+        PacketTranslator.OutboundResult ann84 = PacketTranslator.translateOutbound(annV113.toByteArray(), LegacyProtocol.PROTOCOL_84, true);
+        assertFalse(ann84.suppress());
+        LegacyStream ann84r = LegacyStream.reader(ann84.legacyPacket());
+        assertEquals(0x07, ann84r.readByte()); // TEXT para la familia V0_15
+        assertEquals(5, ann84r.readByte());
+        assertEquals("Mantenimiento a las 22:00", ann84r.readString(LegacyProtocol.PROTOCOL_84));
+        assertEquals(0, ann84r.remaining());
+
+        // 4) TYPE_WHISPER hacia 0.15.x (< 90): degrada a TYPE_SYSTEM y descarta el source
+        PacketTranslator.OutboundResult whis84 = PacketTranslator.translateOutbound(whisV113.toByteArray(), LegacyProtocol.PROTOCOL_84, true);
+        assertFalse(whis84.suppress());
+        LegacyStream whis84r = LegacyStream.reader(whis84.legacyPacket());
+        assertEquals(0x07, whis84r.readByte());
+        assertEquals(5, whis84r.readByte());
+        assertEquals("hola en privado", whis84r.readString(LegacyProtocol.PROTOCOL_84));
+        assertEquals(0, whis84r.remaining());
+
+        // 5) TYPE_CHAT hacia 0.15.x: sin degradacion, conserva source + message
+        LegacyStream chatV113 = LegacyStream.writer(64);
+        chatV113.writeByte(ProtocolInfo_v113.TEXT_PACKET & 0xFF);
+        chatV113.writeByte(TextPacket.TYPE_CHAT);
+        chatV113.writeString(LegacyProtocol.PROTOCOL_113, "Luis");
+        chatV113.writeString(LegacyProtocol.PROTOCOL_113, "buenas");
+        PacketTranslator.OutboundResult chat84 = PacketTranslator.translateOutbound(chatV113.toByteArray(), LegacyProtocol.PROTOCOL_84, true);
+        assertFalse(chat84.suppress());
+        LegacyStream chat84r = LegacyStream.reader(chat84.legacyPacket());
+        assertEquals(0x07, chat84r.readByte());
+        assertEquals(TextPacket.TYPE_CHAT, chat84r.readByte());
+        assertEquals("Luis", chat84r.readString(LegacyProtocol.PROTOCOL_84));
+        assertEquals("buenas", chat84r.readString(LegacyProtocol.PROTOCOL_84));
+        assertEquals(0, chat84r.remaining());
+    }
+
+    @Test
     void translatesOutboundTextPopupAttributesPlayerListAndCraftingDataFor015() {
         // 1) TextPacket TYPE_POPUP (formato v113: type + message + UnsignedVarInt(paramCount) + params[])
         LegacyStream textV113 = LegacyStream.writer(64);
