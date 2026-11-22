@@ -1240,9 +1240,11 @@ class ProtocolBridgeTest {
         assertEquals(0, LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(325, 2, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_110, false).id());
 
         // SetEntityData DATA_FLAG_HAS_COLLISION (bit 48) + bit shifts en 110 y 105
+        // NOTA: el eid se serializa como Nukkit-MOT v113 real (DataPacket.putEntityUniqueId ->
+        // putUnsignedVarInt para protocol < v1_2_0, DataPacket.java:151-158), NO como VarLong zigzag.
         LegacyStream metaV113 = LegacyStream.writer(32);
         metaV113.writeByte(ProtocolInfo_v113.SET_ENTITY_DATA_PACKET & 0xFF);
-        metaV113.writeEntityUniqueId(LegacyProtocol.PROTOCOL_113, 1L);
+        metaV113.writeUnsignedVarLong(1L);
         metaV113.writeUnsignedVarInt(1);
         metaV113.writeUnsignedVarInt(0); // key DATA_FLAGS
         metaV113.writeUnsignedVarInt(LegacyContentMapper.DATA_TYPE_LONG);
@@ -1366,6 +1368,195 @@ class ProtocolBridgeTest {
         byte[] enderNet = NBTIO.write(enderTile, ByteOrder.LITTLE_ENDIAN, true);
         assertNull(LegacyNbtConverter.convertSingleBlockEntity(enderNet, LegacyProtocol.PROTOCOL_91));
         assertNotNull(LegacyNbtConverter.convertSingleBlockEntity(enderNet, LegacyProtocol.PROTOCOL_105));
+    }
+
+    @Test
+    void translatesPlayerActionShiftSneakAcrossLegacyProtocols() {
+        // MySoft PacketPool.php:429-442: el protocolo 90 no tiene tabla propia y resuelve hacia
+        // abajo hasta PacketsIds81, donde PLAYER_ACTION_PACKET = 0x20 (PacketsIds81.php:57).
+        // El bug: la familia V0_16 (tabla v91) mapeaba 0x20 -> MOB_EQUIPMENT y 0x24 -> PLAYER_ACTION,
+        // de modo que el Shift (action=11 START_SNEAK / 12 STOP_SNEAK, mismos valores en la tabla
+        // PROTOCOL_81 de PlayerActionIds.php:372-373 y en v113) se perdia en 0.15.90.
+
+        // 1) P90 inbound: cliente 0.15.90 envia pid 0x20 con action=11 (START_SNEAK)
+        //    Serializacion P90: VarLong eid + VarInt action + pos (Y byte) + VarInt face
+        LegacyStream sneak90 = LegacyStream.writer(16);
+        sneak90.writeByte(0x20);
+        sneak90.writeEntityRuntimeId(LegacyProtocol.PROTOCOL_90, 77L);
+        sneak90.writeVarInt(11);
+        sneak90.writeBlockPosition(LegacyProtocol.PROTOCOL_90, 10, 64, -20);
+        sneak90.writeVarInt(0);
+        PacketTranslator.InboundResult res90 = PacketTranslator.translateInbound(
+                sneak90.toByteArray(), LegacyProtocol.PROTOCOL_90
+        );
+        assertFalse(res90.suppress());
+        assertEquals(ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF, res90.canonicalPacket()[0] & 0xFF);
+        PlayerActionPacket nukkitSneak = new PlayerActionPacket();
+        nukkitSneak.protocol = 113;
+        nukkitSneak.gameVersion = GameVersion.byProtocol(113, false);
+        nukkitSneak.setBuffer(res90.canonicalPacket(), 1);
+        nukkitSneak.decode();
+        assertEquals(77L, nukkitSneak.entityId);
+        assertEquals(11, nukkitSneak.action);
+        assertEquals(10, nukkitSneak.x);
+        assertEquals(64, nukkitSneak.y);
+        assertEquals(-20, nukkitSneak.z);
+
+        // 2) P90 outbound: PLAYER_ACTION v113 debe salir como pid 0x20 con Y serializada como byte
+        LegacyStream actionV113 = LegacyStream.writer(16);
+        actionV113.writeByte(ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF);
+        actionV113.writeEntityRuntimeId(LegacyProtocol.PROTOCOL_113, 77L);
+        actionV113.writeVarInt(12); // STOP_SNEAK
+        actionV113.writeBlockPosition(LegacyProtocol.PROTOCOL_113, 10, 64, -20);
+        actionV113.writeVarInt(0);
+        PacketTranslator.OutboundResult out90 = PacketTranslator.translateOutbound(
+                actionV113.toByteArray(), LegacyProtocol.PROTOCOL_90, false
+        );
+        assertFalse(out90.suppress());
+        LegacyStream legacy90 = LegacyStream.reader(out90.legacyPacket());
+        assertEquals(0x20, legacy90.readByte());
+        assertEquals(77L, legacy90.readEntityRuntimeId(LegacyProtocol.PROTOCOL_90));
+        assertEquals(12, legacy90.readVarInt());
+        int[] bp90 = legacy90.readBlockPosition(LegacyProtocol.PROTOCOL_90);
+        assertEquals(10, bp90[0]);
+        assertEquals(64, bp90[1]);
+        assertEquals(-20, bp90[2]);
+        assertEquals(0, legacy90.readVarInt());
+
+        // 3) P91 sin regresion: PLAYER_ACTION sigue siendo 0x24 en la tabla v91
+        assertEquals(ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF,
+                PacketIdMapper.toV113(LegacyProtocol.PROTOCOL_91, 0x24));
+        assertEquals(0x24, PacketIdMapper.toLegacy(LegacyProtocol.PROTOCOL_91, ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF));
+
+        // 4) P84 (< 90): pid 0x20, layout Long + IntBE x5 (Nukkit-Retro PlayerActionPacket.java:49-56)
+        LegacyStream sneak84 = LegacyStream.writer(32);
+        sneak84.writeByte(0x20);
+        sneak84.writeEntityRuntimeId(LegacyProtocol.PROTOCOL_84, 77L);
+        sneak84.writeIntBE(11); // START_SNEAK
+        sneak84.writeBlockPosition(LegacyProtocol.PROTOCOL_84, 10, 64, -20);
+        sneak84.writeIntBE(0);
+        PacketTranslator.InboundResult res84 = PacketTranslator.translateInbound(
+                sneak84.toByteArray(), LegacyProtocol.PROTOCOL_84
+        );
+        assertFalse(res84.suppress());
+        PlayerActionPacket nukkitSneak84 = new PlayerActionPacket();
+        nukkitSneak84.protocol = 113;
+        nukkitSneak84.gameVersion = GameVersion.byProtocol(113, false);
+        nukkitSneak84.setBuffer(res84.canonicalPacket(), 1);
+        nukkitSneak84.decode();
+        assertEquals(11, nukkitSneak84.action);
+        assertEquals(64, nukkitSneak84.y);
+
+        // 5) P84 outbound: PLAYER_ACTION v113 -> pid 0x20 con IntBE x5
+        PacketTranslator.OutboundResult out84 = PacketTranslator.translateOutbound(
+                actionV113.toByteArray(), LegacyProtocol.PROTOCOL_84, false
+        );
+        assertFalse(out84.suppress());
+        LegacyStream legacy84 = LegacyStream.reader(out84.legacyPacket());
+        assertEquals(0x20, legacy84.readByte());
+        assertEquals(77L, legacy84.readEntityRuntimeId(LegacyProtocol.PROTOCOL_84));
+        assertEquals(12, legacy84.readIntBE());
+        int[] bp84 = legacy84.readBlockPosition(LegacyProtocol.PROTOCOL_84);
+        assertEquals(10, bp84[0]);
+        assertEquals(64, bp84[1]);
+        assertEquals(-20, bp84[2]);
+        assertEquals(0, legacy84.readIntBE());
+
+        // 6) P112 sin regresion: payload v113 pasa intacto (layout identico >= 92)
+        PacketTranslator.OutboundResult out112 = PacketTranslator.translateOutbound(
+                actionV113.toByteArray(), LegacyProtocol.PROTOCOL_112, false
+        );
+        assertFalse(out112.suppress());
+        assertEquals(ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF, out112.legacyPacket()[0] & 0xFF);
+        assertArrayEquals(java.util.Arrays.copyOfRange(actionV113.toByteArray(), 1, actionV113.toByteArray().length),
+                java.util.Arrays.copyOfRange(out112.legacyPacket(), 1, out112.legacyPacket().length));
+    }
+
+    @Test
+    void translatesSneakEchoSetEntityDataWithHighEntityIdsFor015() {
+        // Bug del Shift en 80-84: Nukkit-MOT v113 escribe el eid de SetEntityData con
+        // putEntityUniqueId -> putUnsignedVarInt (DataPacket.java:151-158, protocol < v1_2_0=137;
+        // SetEntityDataPacket.java:38-39). translateSetEntityDataOutbound lo leia con VarLong
+        // zigzag, que solo coincide con unsigned para eids < 64: con eids >= 64 (habitual en
+        // partidas reales, el eid crece con cada drop/mob) el cliente 0.15.x recibia un eid
+        // inexistente y descartaba el paquete, por lo que el sneak nunca se visualizaba.
+        // Mismo patron ya documentado en translateRemoveEntityOutbound para RemoveEntity.
+        long playerEid = 100L; // >= 64: zigzag(100)=200 != 100
+
+        // 1) SetEntityDataPacket v113 real: pid 0x27 + UnsignedVarInt(eid) + metadata
+        //    (Binary.writeMetadata: UnsignedVarInt(count) + key/type VarInt + VarLong flags)
+        cn.nukkit.utils.BinaryStream v113 = new cn.nukkit.utils.BinaryStream();
+        v113.putByte((byte) (ProtocolInfo_v113.SET_ENTITY_DATA_PACKET & 0xFF));
+        v113.putUnsignedVarInt(playerEid);
+        v113.putUnsignedVarInt(1);                       // 1 entrada
+        v113.putUnsignedVarInt(0);                       // key DATA_FLAGS
+        v113.putUnsignedVarInt(LegacyContentMapper.DATA_TYPE_LONG);             // type LONG (Entity.DATA_TYPE_LONG=7)
+        v113.putVarLong(0b10L);                          // bit 1 = DATA_FLAG_SNEAKING
+
+        // 2) Traducir a 0.15.x (protocolo 84) y verificar el eid y el bit de sneak
+        PacketTranslator.OutboundResult out84 = PacketTranslator.translateOutbound(
+                v113.getBuffer(), LegacyProtocol.PROTOCOL_84, false
+        );
+        assertFalse(out84.suppress());
+        LegacyStream r84 = LegacyStream.reader(out84.legacyPacket());
+        assertEquals(0x22, r84.readByte());              // SET_ENTITY_DATA_PACKET 0.15.x (PacketsIds81)
+        assertEquals(playerEid, r84.readLongBE());       // LongBE con el VALOR real del eid
+        int header = r84.readByte();                     // (type BYTE(0) << 5) | key 0
+        assertEquals(0, header);
+        assertEquals(0x02, r84.readByte());              // bit 1 = SNEAKING (ActorMetadataList PROTOCOL_81)
+        // A continuacion el traductor deriva SHOW_NAMETAG(key 3), SILENT(key 4) y NO_AI(key 15)
+        // de los flags (LegacyContentMapper.translateMetadataToPre90) y termina con 0x7F:
+        // recorrer las entradas derivadas hasta el terminador sin EOF.
+        int entries = 1;
+        int terminator = -1;
+        while (!r84.eof()) {
+            int h = r84.readByte();
+            if (h == 0x7F) {
+                terminator = h;
+                break;
+            }
+            int t = (h >> 5) & 0x07;
+            switch (t) {
+                case 0 -> r84.readByte();
+                case 1 -> r84.readShortLE();
+                case 2, 3 -> r84.readIntLE();
+                case 4 -> r84.readBytes(r84.readShortBE());
+                case 6 -> { r84.readIntLE(); r84.readIntLE(); r84.readIntLE(); }
+                case 7 -> r84.readLongLE();
+                default -> r84.readByte();
+            }
+            entries++;
+        }
+        assertEquals(0x7F, terminator);                  // terminador metadata 0.15.x
+        assertTrue(entries >= 1 && entries <= 5);        // DATA_FLAGS + derivadas (3,4,15)
+
+        // 3) Sin regresion en 90..112 (layout UnsignedVarLong/long flags intacto)
+        for (int proto : new int[]{90, 91, 92, 105, 110, 112}) {
+            PacketTranslator.OutboundResult out = PacketTranslator.translateOutbound(
+                    v113.getBuffer(), LegacyProtocol.resolve(proto), false
+            );
+            assertFalse(out.suppress());
+            LegacyStream r = LegacyStream.reader(out.legacyPacket());
+            r.readByte();                                 // pid (varia por familia)
+            assertEquals(playerEid, r.readUnsignedVarLong());
+        }
+
+        // 4) El mismo eid debe matchear el registro de entidades del estado de sesion
+        //    (getEntity alimentado por AddPlayer/AddEntity con el id unsigned real)
+        SessionProtocolRegistry registry = new SessionProtocolRegistry();
+        SessionProtocolRegistry.LegacySessionState state = registry.registerOrUpdate(
+                new DummyChannelId("sneak-echo-test"), null, 84, "Jugador"
+        );
+        state.setPlayerEntityId(playerEid);
+        state.trackEntity(playerEid, 0, 0);
+        PacketTranslator.OutboundResult outTracked = PacketTranslator.translateOutbound(
+                v113.getBuffer(), LegacyProtocol.PROTOCOL_84, false, registry, state
+        );
+        assertFalse(outTracked.suppress());
+        // La traduccion con estado debe producir el mismo eid (sin corromper por lookup fallido)
+        LegacyStream rt = LegacyStream.reader(outTracked.legacyPacket());
+        rt.readByte();
+        assertEquals(playerEid, rt.readLongBE());
     }
 
     private record DummyChannelId(String id) implements ChannelId {
