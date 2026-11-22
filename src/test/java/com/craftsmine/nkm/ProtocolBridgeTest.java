@@ -8,7 +8,10 @@ import cn.nukkit.nbt.tag.CompoundTag;
 import cn.nukkit.nbt.tag.ListTag;
 import cn.nukkit.nbt.tag.LongTag;
 import cn.nukkit.nbt.tag.ShortTag;
+import cn.nukkit.network.Network;
+import cn.nukkit.network.PacketPool;
 import cn.nukkit.network.protocol.AdventureSettingsPacket;
+import cn.nukkit.network.protocol.MobEffectPacket;
 import cn.nukkit.network.protocol.MovePlayerPacket;
 import cn.nukkit.network.protocol.PlayerActionPacket;
 import cn.nukkit.network.protocol.PlayerListPacket;
@@ -1470,6 +1473,147 @@ class ProtocolBridgeTest {
         assertEquals(ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF, out112.legacyPacket()[0] & 0xFF);
         assertArrayEquals(java.util.Arrays.copyOfRange(actionV113.toByteArray(), 1, actionV113.toByteArray().length),
                 java.util.Arrays.copyOfRange(out112.legacyPacket(), 1, out112.legacyPacket().length));
+    }
+
+    @Test
+    void translatesMobEffectPacketIdAndLayoutAcrossLegacyProtocols() {
+        // MySoft PacketPool.php:429-441: el protocolo 90 no tiene tabla propia y resuelve hacia
+        // abajo hasta PacketsIds81, donde MOB_EFFECT_PACKET = 0x19 (PacketsIds81.php:51) y
+        // 0x1e = INTERACT_PACKET (PacketsIds81.php:55). El bug: la familia V0_16 (tabla v91,
+        // MOB_EFFECT = 0x1e en PacketsIds91.php:56) hacia que el cliente 0.15.90 leyera el
+        // efecto como InteractPacket. La serializacion P90 si usa las ramas >= 90
+        // (MobEffectPacket.php:54-87: VarInt/UnsignedVarLong desde PROTOCOL_90).
+
+        // MobEffect v113 real (Nukkit-MOT MobEffectPacket.java:44-51 con putEntityRuntimeId ->
+        // putUnsignedVarInt en protocol < v1_2_0, DataPacket.java:175-181): ADD de Speed (1)
+        LegacyStream effectV113 = LegacyStream.writer(24);
+        effectV113.writeByte(ProtocolInfo_v113.MOB_EFFECT_PACKET & 0xFF);
+        effectV113.writeUnsignedVarInt(77); // eid: Nukkit-MOT lo escribe como UnsignedVarInt
+        effectV113.writeByte(1);            // EVENT_ADD
+        effectV113.writeVarInt(1);          // effectId Speed
+        effectV113.writeVarInt(0);          // amplifier
+        effectV113.writeBoolean(true);      // particles
+        effectV113.writeVarInt(200);        // duration
+
+        // 1) P90 outbound: pid 0x19 (tabla 81) con layout >= 90 (UVarLong + VarInt)
+        PacketTranslator.OutboundResult out90 = PacketTranslator.translateOutbound(
+                effectV113.toByteArray(), LegacyProtocol.PROTOCOL_90, false
+        );
+        assertFalse(out90.suppress());
+        LegacyStream legacy90 = LegacyStream.reader(out90.legacyPacket());
+        assertEquals(0x19, legacy90.readByte());
+        assertEquals(77L, legacy90.readEntityRuntimeId(LegacyProtocol.PROTOCOL_90));
+        assertEquals(1, legacy90.readByte());
+        assertEquals(1, legacy90.readVarInt());
+        assertEquals(0, legacy90.readVarInt());
+        assertTrue(legacy90.readBoolean());
+        assertEquals(200, legacy90.readVarInt());
+
+        // 2) P91 sin regresion: MOB_EFFECT sigue siendo 0x1e en la tabla v91
+        PacketTranslator.OutboundResult out91 = PacketTranslator.translateOutbound(
+                effectV113.toByteArray(), LegacyProtocol.PROTOCOL_91, false
+        );
+        assertFalse(out91.suppress());
+        assertEquals(0x1e, out91.legacyPacket()[0] & 0xFF);
+
+        // 3) P110 sin regresion: pid 0x1d identico a v113 (tabla v110, PacketsIds110.php:55)
+        PacketTranslator.OutboundResult out110 = PacketTranslator.translateOutbound(
+                effectV113.toByteArray(), LegacyProtocol.PROTOCOL_110, false
+        );
+        assertFalse(out110.suppress());
+        assertEquals(0x1d, out110.legacyPacket()[0] & 0xFF);
+
+        // 4) P84 (< 90) sin regresion: pid 0x19 con layout LongBE + bytes + IntBE
+        PacketTranslator.OutboundResult out84 = PacketTranslator.translateOutbound(
+                effectV113.toByteArray(), LegacyProtocol.PROTOCOL_84, false
+        );
+        assertFalse(out84.suppress());
+        LegacyStream legacy84 = LegacyStream.reader(out84.legacyPacket());
+        assertEquals(0x19, legacy84.readByte());
+        assertEquals(77L, legacy84.readLongBE());
+        assertEquals(1, legacy84.readByte());
+        assertEquals(1, legacy84.readByte());
+        assertEquals(0, legacy84.readByte());
+        assertTrue(legacy84.readBoolean());
+        assertEquals(200, legacy84.readIntBE());
+    }
+
+    @Test
+    void registersMobEffectInV113PoolOfNukkitMotNetwork() {
+        // Nukkit-MOT Network#registerPackets (Network.java:579-664) NO registra MobEffectPacket en
+        // packetPool113 (solo MOB_ARMOR_EQUIPMENT/MOB_EQUIPMENT): en protocolo 113 (< v1_2_0=137)
+        // DataPacket#reset() resuelve el pid del sub-paquete con PacketPool#getPacketId, que lanza
+        // IllegalArgumentException (PacketPool.java:58-65) y cae al fallback 0x6a (DataPacket.java:58-67,
+        // id inexistente en 1.1). El sub-paquete salia del servidor con pid 0x6a, PacketIdMapper lo
+        // consideraba UNMAPPED y los efectos se descartaban para TODOS los clientes 80-113.
+        Network network = new Network(null);
+        PacketPool pool113 = network.getPacketPool(GameVersion.V1_1_0);
+        assertThrows(IllegalArgumentException.class, () -> pool113.getPacketId(MobEffectPacket.class));
+
+        // Registro oficial (Network.java:223-226) usado por
+        // MultiversionBridgeManager#registerV113MobEffectPacket: tras el registro, reset()
+        // escribe el pid real 0x1d (ProtocolInfo_v113.java:37, MySoft PacketsIds110.php:55).
+        network.registerPacket(GameVersion.V1_1_0, ProtocolInfo_v113.MOB_EFFECT_PACKET, MobEffectPacket.class);
+        assertEquals(ProtocolInfo_v113.MOB_EFFECT_PACKET & 0xFF,
+                network.getPacketPool(GameVersion.V1_1_0).getPacketId(MobEffectPacket.class));
+    }
+
+    @Test
+    void dropsEffectIdsThatDoNotExistInEachLegacyClientVersion() {
+        // Nukkit-MOT conoce efectos hasta RAID_OMEN=36 (Effect.java:26-68) y su gate
+        // canReceiveEffectPacket (Player.java:2674-2682) solo excluye los 4 efectos de 1.21.0
+        // (WIND_CHARGED/WEAVING/OOZING/INFESTED) en protocolos < v1_21_0: en la sesion puente P113
+        // los IDs 24-31 y 36 SI llegan al traductor. Validos por version (LegacyProtocol.java:13-30 +
+        // MySoft ProtocolInfo.php:198-215): 1-23 clasicos en todos los legacy; LEVITATION(24) solo
+        // desde 1.0.0 (P92, Family V1_0_0; P90/P91 son 0.15.90/0.16.x Family V0_16); 25+ no existen
+        // en ninguna version <= 1.1.13.
+
+        // 1) 25 (FATAL_POISON, Effect.java:57) no existe en ninguna version legacy: descarte total
+        for (LegacyProtocol dst : new LegacyProtocol[]{
+                LegacyProtocol.PROTOCOL_84, LegacyProtocol.PROTOCOL_90, LegacyProtocol.PROTOCOL_110}) {
+            assertTrue(PacketTranslator.translateOutbound(mobEffectV113(25), dst, false).suppress(),
+                    "FATAL_POISON debe descartarse en " + dst);
+        }
+
+        // 2) 24 (LEVITATION) no existe en 0.15.x ni en 0.15.90/0.16.x (P80-P91): se descarta
+        assertTrue(PacketTranslator.translateOutbound(mobEffectV113(24), LegacyProtocol.PROTOCOL_84, false).suppress());
+        assertTrue(PacketTranslator.translateOutbound(mobEffectV113(24), LegacyProtocol.PROTOCOL_90, false).suppress());
+        assertTrue(PacketTranslator.translateOutbound(mobEffectV113(24), LegacyProtocol.PROTOCOL_91, false).suppress());
+        // ...y pasa desde 1.0.0 (P92, Family V1_0_0, pid 0x1e de la tabla v100, PacketIdMapper.java:234)
+        PacketTranslator.OutboundResult lev92 = PacketTranslator.translateOutbound(
+                mobEffectV113(24), LegacyProtocol.PROTOCOL_92, false);
+        assertFalse(lev92.suppress());
+        assertEquals(0x1e, lev92.legacyPacket()[0] & 0xFF);
+        // ...y en 1.1.x sin regresion (pid identidad 0x1d, initV110Table, PacketIdMapper.java:400-405)
+        PacketTranslator.OutboundResult lev110 = PacketTranslator.translateOutbound(
+                mobEffectV113(24), LegacyProtocol.PROTOCOL_110, false);
+        assertFalse(lev110.suppress());
+        assertEquals(0x1d, lev110.legacyPacket()[0] & 0xFF);
+
+        // 3) 23 (SATURATION, el maximo clasico) pasa en todas las versiones legacy
+        for (LegacyProtocol dst : new LegacyProtocol[]{
+                LegacyProtocol.PROTOCOL_84, LegacyProtocol.PROTOCOL_90, LegacyProtocol.PROTOCOL_110}) {
+            assertFalse(PacketTranslator.translateOutbound(mobEffectV113(23), dst, false).suppress(),
+                    "SATURATION debe pasar en " + dst);
+        }
+
+        // 4) IDs no positivos se descartan
+        assertTrue(PacketTranslator.translateOutbound(mobEffectV113(0), LegacyProtocol.PROTOCOL_110, false).suppress());
+    }
+
+    private static byte[] mobEffectV113(int effectId) {
+        // MobEffect v113 real (Nukkit-MOT MobEffectPacket.java:44-51, protocolo 113 < v1_20_70:
+        // sin tick): pid + eid UVarInt + eventId byte + effectId/amplifier VarInt + particles bool
+        // + duration VarInt
+        LegacyStream effectV113 = LegacyStream.writer(24);
+        effectV113.writeByte(ProtocolInfo_v113.MOB_EFFECT_PACKET & 0xFF);
+        effectV113.writeUnsignedVarInt(77);
+        effectV113.writeByte(1);            // EVENT_ADD
+        effectV113.writeVarInt(effectId);
+        effectV113.writeVarInt(0);
+        effectV113.writeBoolean(true);
+        effectV113.writeVarInt(200);
+        return effectV113.toByteArray();
     }
 
     @Test

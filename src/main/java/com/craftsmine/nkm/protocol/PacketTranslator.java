@@ -1301,7 +1301,14 @@ public final class PacketTranslator {
     }
 
     private static OutboundResult translateMobEffectOutboundResult(byte[] payload, LegacyProtocol dst) {
-        int legacyId = PacketIdMapper.toLegacy(dst, ProtocolInfo_v113.MOB_EFFECT_PACKET & 0xFF);
+        // MySoft PacketPool no define tabla para el protocolo 90: getPacketIdByMagic() resuelve
+        // hacia abajo hasta PacketsIds81 (MOB_EFFECT_PACKET = 0x19) aunque la serializacion de
+        // campos ya es VarInt/UnsignedVarLong (umbral >= 90, MobEffectPacket.php:54-87). Usar la
+        // tabla 91 (0x1e) hace que el cliente 0.15.90 lea un InteractPacket (PacketsIds81.php:55)
+        // y el efecto nunca se aplique.
+        int legacyId = dst.getProtocol() == 90
+                ? 0x19
+                : PacketIdMapper.toLegacy(dst, ProtocolInfo_v113.MOB_EFFECT_PACKET & 0xFF);
         if (legacyId == PacketIdMapper.UNMAPPED) {
             return OutboundResult.drop(false);
         }
@@ -1313,7 +1320,17 @@ public final class PacketTranslator {
         boolean particles = in.readBoolean();
         int duration = in.readVarInt();
 
-        if (effectId <= 0 || (dst.isBefore90() && effectId > 23) || effectId > 24) {
+        // Filtro de efectos inexistentes en la version del cliente. Nukkit-MOT conoce efectos hasta
+        // RAID_OMEN=36 (Effect.java:26-68) y su gate canReceiveEffectPacket (Player.java:2674-2682)
+        // solo excluye los 4 efectos de 1.21.0 (WIND_CHARGED/WEAVING/OOZING/INFESTED) por debajo de
+        // v1_21_0: en la sesion puente P113 los IDs 24-31 y 36 llegan hasta aqui y el puente debe
+        // filtrarlos. Validos por version: 1-23 existen desde 0.11 (todos los legacy); LEVITATION (24)
+        // llega con 1.0.0 (Ender Update, shulkers), no en 0.15.x/0.16.x, y la frontera de version es
+        // el protocolo 92 (LegacyProtocol.java:18-20: P90/P91 = 0.15.90/0.16.x Family V0_16, P92 =
+        // 1.0.0.0 Family V1_0_0; MySoft ProtocolInfo.php:202-204); 25+ (FATAL_POISON...RAID_OMEN,
+        // Effect.java:57-68) no existen en ninguna version <= 1.1.13 y se descartan siempre.
+        // isBefore92() delimita la version del cliente; isBefore90() mas abajo solo la serializacion.
+        if (effectId <= 0 || (dst.isBefore92() && effectId > 23) || effectId > 24) {
             return OutboundResult.drop(false);
         }
 
