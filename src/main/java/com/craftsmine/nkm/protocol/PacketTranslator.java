@@ -285,6 +285,7 @@ public final class PacketTranslator {
             case 0x1e -> translateUpdateAttributesOutbound(payload, target);
             case 0x1f -> translateMobEquipmentOutbound(payload, target);
             case 0x20 -> translateMobArmorOutbound(payload, target);
+            case 0x24 -> translatePlayerActionOutbound(payload, target);
             case 0x26 -> translateHurtArmorOutbound(payload, target);
             case 0x27 -> translateSetEntityDataOutbound(payload, target, state);
             case 0x28 -> translateSetEntityMotionOutbound(payload, target);
@@ -505,6 +506,35 @@ public final class PacketTranslator {
         out.writeVarInt(action);
         out.writeBlockPosition(LegacyProtocol.PROTOCOL_113, bp[0], bp[1], bp[2]);
         out.writeVarInt(face);
+        return out.toByteArray();
+    }
+
+    private static byte[] translatePlayerActionOutbound(byte[] payload, LegacyProtocol dst) {
+        // Espejo exacto del inbound: < 90 usa Long + IntBE x5 (Nukkit-Retro PlayerActionPacket.java:49-56;
+        // MySoft PlayerActionPacket.php:107-109,115-118); 90..91 usan VarLong/VarInt con Y como byte
+        // (MySoft NetworkBinaryStream.php:1120-1128, umbral PROTOCOL_92 para Y UnsignedVarInt);
+        // >= 92 comparte layout con v113. Los valores de action 0..18 son identicos en la tabla
+        // PROTOCOL_81 de MySoft (PlayerActionIds.php:360-380, rige 81..129) y en v113: no se remapean.
+        if (!dst.isBefore90() && !dst.isBefore92()) {
+            return payload;
+        }
+        LegacyStream in = LegacyStream.reader(payload);
+        LegacyStream out = LegacyStream.writer(32);
+        long eid = in.readEntityRuntimeId(LegacyProtocol.PROTOCOL_113);
+        int action = in.readVarInt();
+        int[] bp = in.readBlockPosition(LegacyProtocol.PROTOCOL_113);
+        int face = in.readVarInt();
+
+        out.writeEntityRuntimeId(dst, eid);
+        if (dst.isBefore90()) {
+            out.writeIntBE(action);
+            out.writeBlockPosition(dst, bp[0], bp[1], bp[2]);
+            out.writeIntBE(face);
+        } else {
+            out.writeVarInt(action);
+            out.writeBlockPosition(dst, bp[0], bp[1], bp[2]);
+            out.writeVarInt(face);
+        }
         return out.toByteArray();
     }
 
@@ -1394,7 +1424,15 @@ public final class PacketTranslator {
 
     private static byte[] translateSetEntityDataOutbound(byte[] payload, LegacyProtocol dst, LegacySessionState state) {
         LegacyStream in = LegacyStream.reader(payload);
-        long eid = in.readEntityUniqueId(LegacyProtocol.PROTOCOL_113);
+        // Nukkit-MOT v113 escribe el eid de SetEntityData con putEntityUniqueId -> putUnsignedVarInt
+        // (DataPacket.java:151-158, protocol < v1_2_0=137; SetEntityDataPacket.java:38-39), sin zigzag.
+        // readEntityUniqueId(PROTOCOL_113) usa VarLong zigzag y corrompe el valor para eids >= 64:
+        // el cliente 0.15.x recibia SetEntityData con un eid inexistente (p.ej. 100 -> -50) y descartaba
+        // el paquete, de modo que el Shift/sneak (DATA_FLAG_SNEAKING bit 1, ActorMetadataList PROTOCOL_81)
+        // nunca se visualizaba. Mismo patron ya aplicado en translateRemoveEntityOutbound: el AddPlayer/AddEntity
+        // de cada familia expone el VALOR real del id (unsigned), y el eid debe matchear el del spawn para que
+        // el cliente aplique la metadata a la entidad correcta.
+        long eid = in.readUnsignedVarLong();
         EntitySpawnInfo spawnInfo = state != null ? state.getEntity(eid) : null;
         LegacyStream out = LegacyStream.writer(64);
         out.writeEntityRuntimeId(dst, eid);
