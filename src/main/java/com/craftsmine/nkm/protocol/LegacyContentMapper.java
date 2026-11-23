@@ -157,6 +157,7 @@ public final class LegacyContentMapper {
         // El bit 0x04 del End Portal Frame (ojo de ender colocado) es valido en 0.15.x (MySoft EndPortalFrame.php:64).
         if (dst.isBefore92()) {
             switch (id) {
+                case 119 -> { id = 90; m = 0; }    // END_PORTAL -> PORTAL
                 case 122 -> { id = 49; m = 0; }    // DRAGON_EGG -> OBSIDIAN
                 case 130 -> { id = 54; m = 2; }    // ENDER_CHEST -> CHEST
                 case 137, 188, 189 -> { id = 159; m = 1; } // COMMAND_BLOCK* -> ORANGE_CLAY

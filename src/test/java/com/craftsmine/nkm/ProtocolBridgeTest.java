@@ -1713,7 +1713,6 @@ class ProtocolBridgeTest {
             assertEquals((121 << 8), LegacyContentMapper.mapBlockAndMeta(121, 0, dst));            // END_STONE
             assertEquals((120 << 8) | 0x04, LegacyContentMapper.mapBlockAndMeta(120, 0x04, dst)); // FRAME con ojo
             assertEquals((120 << 8) | 0x03, LegacyContentMapper.mapBlockAndMeta(120, 0x03, dst)); // FRAME orientacion
-            assertEquals((119 << 8), LegacyContentMapper.mapBlockAndMeta(119, 0, dst));           // END_PORTAL
         }
         // En 1.0.x+ (92..113) siguen intactos (nunca hubo remapeo alli)
         assertEquals((121 << 8), LegacyContentMapper.mapBlockAndMeta(121, 0, LegacyProtocol.PROTOCOL_92));
