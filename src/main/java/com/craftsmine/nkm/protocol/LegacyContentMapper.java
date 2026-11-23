@@ -346,7 +346,9 @@ public final class LegacyContentMapper {
             }
         }
 
-        // Spawn Eggs (383): eliminar en creativo y convertir a AIR en inventario si el mob no existe nativamente en dst
+        // Spawn Eggs (383): eliminar en creativo y convertir a AIR en inventario si el mob no existe nativamente en dst.
+        // El icono del egg se renderiza en el cliente mientras la entidad exista en esa version,
+        // asi que el gating por lista vanilla creativa NO aplica aqui (0.15.10 no crashea con eggs extra).
         if (id == 383) {
             int mappedMob = mapEntityTypeOutbound(meta, dst);
             if (mappedMob < 0 || mappedMob != meta) {
@@ -374,11 +376,18 @@ public final class LegacyContentMapper {
             return creativeMode ? null : LegacyStream.LegacySlot.AIR;
         }
 
-        // Tipped Arrows (262): en < 90 solo 0; en 90..112 solo 0 y 6..37
-        if (id == 262 && meta > 0) {
-            if (dst.isBefore90() || meta < 6 || meta > 37) {
-                return creativeMode ? null : LegacyStream.LegacySlot.AIR;
-            }
+        // Tipped Arrows (262): metas 1..5 nunca existen; 6..36 existen desde 0.15.0 (version exclusive,
+        // hechas con calderos de pocion); 37 desde 0.16 (P91).
+        // El gating por protocolo (P90 sin 262:37) lo cubre isItemSupportedOnClient.
+        if (id == 262 && meta > 0 && (meta < 6 || meta > 37)) {
+            return creativeMode ? null : LegacyStream.LegacySlot.AIR;
+        }
+
+        // Items validos en 1.1.0 (Nukkit-MOT los envia tal cual) pero ausentes en clientes 80..112.
+        // Umbrales verificados contra MySoft creative_items/{81,82,91,100,110}.json y
+        // Nukkit-Retro Item*.isSupportedOn (v0_14_0=45..70, v1_0_0=92, v1_1_0=110).
+        if (!isItemSupportedOnClient(id, meta, dst)) {
+            return creativeMode ? null : LegacyStream.LegacySlot.AIR;
         }
 
         byte[] safeNbt = sanitizeItemNbtForSlot(nbt, dst);
@@ -387,6 +396,47 @@ public final class LegacyContentMapper {
         }
 
         return new LegacyStream.LegacySlot(id, meta, count, safeNbt, canPlace, canDestroy);
+    }
+
+    /**
+     * Items que existen en el creativo v113 de Nukkit-MOT pero que un cliente 80..112 no conoce
+     * ( IDs sin textura/registro local -> crash del inventario al abrir/navegar la pestana ).
+     * Umbrales verificados contra Nukkit-Retro Item*.isSupportedOn (0 umbrales entre v0_14_0=45 y
+     * v0_16_0=91: 0.14..0.15.10 comparten el mismo inventario; pociones/brewing/doors/item frames/
+     * rabbits/mutton/lead/name tag/tipped arrows son de 0.14 o 0.15.0) y las adiciones de 0.15.0.
+     * NOTA: la lista MySoft creative_items/81 es incompleta y NO refleja el inventario real de 0.15.0.
+     */
+    private static boolean isItemSupportedOnClient(int id, int meta, LegacyProtocol dst) {
+        if (dst.getProtocol() < 91) {
+            // Introducidos en 0.16/0.17 (P91+): potion 373:36 (wither), splash 438:36,
+            // brick 336, netherbrick 405, prismarine shard 409, prismarine crystals 422, tipped arrow 262:37.
+            // NOTA: enchanted book (403) NO se filtra aqui: existe desde 0.12/0.14 (encantamientos),
+            // el encantamiento invalido se maneja por NBT en sanitizeItemNbtForSlot.
+            // rabbit hide (415) y fish (460..463) tampoco: items de 0.13/0.14 (rabbits/pesca).
+            if (id == 336 || id == 405 || id == 409 || id == 422) {
+                return false;
+            }
+            if (id == 373 && meta == 36) {
+                return false;
+            }
+            if (id == 438 && meta == 36) {
+                return false;
+            }
+            if (id == 262 && meta == 37) {
+                return false;
+            }
+        }
+        // beetroot 457, beetroot seeds 458 y beetroot soup 459 NO se filtran: los beetroots son
+        // exclusivos de Pocket Edition desde 0.8.0 (llegaron a Java en 1.8). Salmon 460, clownfish 461,
+        // pufferfish 462 y cooked salmon 463 tampoco: tipos de pescado de la pesca de 0.11.
+        // Introducidos despues de 1.1.0 (solo en v113+): kelp 335, boats 333:6..10
+        if (id == 335) {
+            return false;
+        }
+        if (id == 333 && meta >= 6) {
+            return false;
+        }
+        return true;
     }
 
     private static boolean isBlockSupportedAsItem(int blockId, int meta, LegacyProtocol dst) {

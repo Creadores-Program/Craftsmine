@@ -564,11 +564,38 @@ class ProtocolBridgeTest {
         LegacyStream out = LegacyStream.reader(res.legacyPacket());
         assertEquals(0x2e, out.readByte());
         assertEquals(0x79, out.readByte());
-        assertEquals(2, out.readShortBE()); // solo Stone y Enchanted Book permanecen
+        // En 0.15.10 permanecen Stone y el Enchanted Book (403): existe desde 0.12/0.14
+        // (aunque MySoft creative_items/82 no lo liste en el creativo vanilla).
+        assertEquals(2, out.readShortBE());
 
         LegacyStream.LegacySlot s1 = out.readSlot(LegacyProtocol.PROTOCOL_84);
         assertEquals(1, s1.id());
-        LegacyStream.LegacySlot s2 = out.readSlot(LegacyProtocol.PROTOCOL_84);
+
+        LegacyStream.LegacySlot sBook84 = out.readSlot(LegacyProtocol.PROTOCOL_84);
+        assertEquals(403, sBook84.id());
+        assertTrue(sBook84.nbt().length > 0);
+
+        // El mismo Enchanted Book SI se reenvia a 0.16+ (P91+) con su NBT convertido
+        LegacyStream pk91 = LegacyStream.writer(512);
+        pk91.writeByte(ProtocolInfo_v113.CONTAINER_SET_CONTENT_PACKET & 0xFF);
+        pk91.writeUnsignedVarInt(0x79);
+        pk91.writeEntityUniqueId(LegacyProtocol.PROTOCOL_113, 1L);
+        pk91.writeUnsignedVarInt(1);
+        pk91.writeVarInt(403);
+        pk91.writeVarInt(1); // meta=0, count=1
+        pk91.writeShortLE(0xFFFF);
+        pk91.writeByte(1); // nbt version / tag count
+        pk91.writeBytes(networkNbt);
+        pk91.writeVarInt(0); // canPlaceOn
+        pk91.writeVarInt(0); // canDestroy
+        pk91.writeUnsignedVarInt(0); // hotbar
+        PacketTranslator.OutboundResult res91 = PacketTranslator.translateOutbound(pk91.toByteArray(), LegacyProtocol.PROTOCOL_91, true);
+        assertFalse(res91.suppress());
+        LegacyStream out91 = LegacyStream.reader(res91.legacyPacket());
+        assertEquals(0x33, out91.readByte()); // CONTAINER_SET_CONTENT legacy id para 91 (familia V0_16)
+        assertEquals(0x79, out91.readByte()); // windowid (byte en < 110)
+        assertEquals(1, out91.readUnsignedVarInt());
+        LegacyStream.LegacySlot s2 = out91.readSlot(LegacyProtocol.PROTOCOL_91);
         assertEquals(403, s2.id());
         assertTrue(s2.nbt().length > 0);
         CompoundTag parsedOut = (CompoundTag) NBTIO.readTag(new ByteArrayInputStream(s2.nbt()), ByteOrder.LITTLE_ENDIAN, false);
@@ -587,6 +614,152 @@ class ProtocolBridgeTest {
         assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(444, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
         assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(84, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
         assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(160, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+    }
+
+    @Test
+    void filtersBugItemsByProtocolAndSerializesWildcardMetaCorrectly() {
+        // ===== Semillas: existen desde 0.15.0 en todos los protocolos (MySoft creative_items/81) =====
+        for (LegacyProtocol dst : new LegacyProtocol[]{LegacyProtocol.PROTOCOL_81, LegacyProtocol.PROTOCOL_84,
+                LegacyProtocol.PROTOCOL_91, LegacyProtocol.PROTOCOL_100, LegacyProtocol.PROTOCOL_110, LegacyProtocol.PROTOCOL_112}) {
+            assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(295, 0, 1, new byte[0], new String[0], new String[0]), dst, true));
+            assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(361, 0, 1, new byte[0], new String[0], new String[0]), dst, true));
+            assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(362, 0, 1, new byte[0], new String[0], new String[0]), dst, true));
+            assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(458, 0, 1, new byte[0], new String[0], new String[0]), dst, true));
+        }
+
+        // ===== Alimentos / spider eye / minerales: 0.15.0 hereda TODO el inventario de 0.14 (brewing) =====
+        // apple 260, bread 297, beef 363, wheat 296: en vanilla 81
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(260, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(363, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        // rotten flesh 367, spider eye 375/376: items de 0.14 (brewing) -> presentes tambien en 0.15.0
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(367, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(375, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(376, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(375, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        // Adiciones de 0.15.0 (wiki): saddle 329, name tag 421, lead 420, item frame 389 (0.14),
+        // mushroom stew 282, doors 427..431, rabbit 411..414 -> pasan en 80/81
+        // (MySoft creative_items/81 es incompleta y NO refleja el inventario real de 0.15.0)
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(282, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(329, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(389, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(411, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(420, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(421, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(427, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        // Adiciones 0.15.0 confirmadas por wiki: fire charge 385, horse armor 416, mutton 423, carrot on a stick 398
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(385, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(416, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(423, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(398, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        // Beetroot 457/seeds 458/soup 459: exclusivos de PE desde 0.8.0 (wiki) -> nunca se filtran
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(457, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(459, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        // Fish types (salmon 460, pufferfish 462): pesca desde 0.11 -> nunca se filtran
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(460, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(462, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        // minerales: coal 263, diamond 264, iron 265, gold 266, quartz 406, emerald 388: vanilla 81
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(263, 1, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(264, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(406, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(388, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+
+        // ===== Tintes (351): 0..15 en todos; 16..19 (1.14+) nunca =====
+        for (LegacyProtocol dst : new LegacyProtocol[]{LegacyProtocol.PROTOCOL_81, LegacyProtocol.PROTOCOL_91, LegacyProtocol.PROTOCOL_112}) {
+            assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(351, 15, 1, new byte[0], new String[0], new String[0]), dst, true));
+            assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(351, 16, 1, new byte[0], new String[0], new String[0]), dst, true));
+        }
+
+        // ===== Pociones (373) y splash (438): brewing desde 0.14 -> 0.15.0 las tiene (0..35);
+        // 373:36 / 438:36 (potion of decay, wither) desde 0.16 (P91) =====
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(373, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(373, 35, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(373, 36, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_90, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(373, 36, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(438, 5, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(438, 5, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        // splash base 0..4: brewable desde 0.14 (botella de agua + polvora) -> pasa tambien en 0.15/0.16
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(438, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_90, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(438, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+        // Lingering (441): solo 100+ (MySoft creative_items/100)
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(441, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(441, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_100, true));
+
+        // ===== Flechas con efecto (262): metas 6..36 desde 0.15.0 (version exclusive, calderos de pocion);
+        // 37 desde 0.16 (P91); 38+ solo v113 =====
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(262, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(262, 6, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(262, 36, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(262, 37, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_90, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(262, 37, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(262, 38, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_112, true));
+
+        // ===== Libro encantado (403): existe incluso en 0.14 (encantamientos); nunca se filtra por protocolo =====
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(403, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(403, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(403, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+
+        // ===== Kelp (335) y boats 333:6..10: solo v113, nunca en 80..112 =====
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(335, 0, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_112, true));
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(333, 6, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_112, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(333, 5, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+
+        // ===== Spawn eggs (383): el gating es SOLO por entidad nativa en dst (mapEntityTypeOutbound),
+        // NO por lista vanilla creativa: 0.15.10 (84) renderiza sin crash eggs de mobs que existen
+        // en su tabla de entidades aunque no esten en su inventario creativo vanilla. =====
+        // Eggs de mobs nativos en 0.15.x pasan incluso en P80/81 (no estan en vanilla 81 pero no crashean)
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 10, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 15, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 10, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        // Eggs anadidos en 0.15.0 (wiki): caballo 23, caballo zombi 27, stray 46, husk 47,
+        // wither skeleton 48 -> todos nativos en 0.15.x, pasan en 80/81 tambien
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 23, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 27, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 46, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 47, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 48, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_81, true));
+        // Egg 49 (guardian, mob de 0.16): en < 90 la entidad se reemplaza (49 -> 17) -> filtered; en 90+ nativo -> pasa
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 49, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_84, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 49, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_90, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 49, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+        // Egg 54 (shulker, 1.0+): en < 92 se reemplaza (54 -> 43) -> filtered; en 100+ nativo -> pasa
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 54, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_91, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 54, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_100, true));
+        // Egg 57 (vindicator, 1.1): en < 110 se reemplaza (57 -> 45) -> filtered; en 110 nativo -> pasa
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 57, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_105, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 57, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_110, true));
+        // Eggs de mobs 1.2+ (meta > 105): sin entidad nativa en ningun cliente legacy -> filtered
+        assertNull(LegacyContentMapper.mapSlotOutbound(new LegacyStream.LegacySlot(383, 108, 1, new byte[0], new String[0], new String[0]), LegacyProtocol.PROTOCOL_112, true));
+
+        // ===== Wildcard meta -1 (Nukkit-MOT putSlotV113 con hasMeta=false) =====
+        // En 90..109 NO debe emitirse 0x7FFF crudo (MySoft solo lo interpreta como wildcard en >= 110):
+        // se serializa como damage 0.
+        for (LegacyProtocol dst : new LegacyProtocol[]{LegacyProtocol.PROTOCOL_90, LegacyProtocol.PROTOCOL_91,
+                LegacyProtocol.PROTOCOL_100, LegacyProtocol.PROTOCOL_107}) {
+            LegacyStream w = LegacyStream.writer(16);
+            w.writeSlot(dst, new LegacyStream.LegacySlot(351, -1, 1, new byte[0], new String[0], new String[0]));
+            LegacyStream r = LegacyStream.reader(w.toByteArray());
+            assertEquals(351, r.readVarInt());
+            int aux = r.readVarInt();
+            assertEquals(0, aux >> 8, "meta wildcard debe serializarse como 0 en " + dst);
+            assertEquals(1, aux & 0xFF);
+        }
+        // En 110..112 se conserva el wildcard nativo 0x7FFF
+        for (LegacyProtocol dst : new LegacyProtocol[]{LegacyProtocol.PROTOCOL_110, LegacyProtocol.PROTOCOL_112}) {
+            LegacyStream w = LegacyStream.writer(16);
+            w.writeSlot(dst, new LegacyStream.LegacySlot(351, -1, 1, new byte[0], new String[0], new String[0]));
+            LegacyStream r = LegacyStream.reader(w.toByteArray());
+            assertEquals(351, r.readVarInt());
+            int aux = r.readVarInt();
+            assertEquals(0x7FFF, aux >> 8, "meta wildcard debe conservarse 0x7FFF en " + dst);
+            assertEquals(1, aux & 0xFF);
+        }
+        // En < 90 el meta negativo ya se escribia como 0 (short con signo)
+        LegacyStream w84 = LegacyStream.writer(16);
+        w84.writeSlot(LegacyProtocol.PROTOCOL_84, new LegacyStream.LegacySlot(351, -1, 1, new byte[0], new String[0], new String[0]));
+        LegacyStream r84 = LegacyStream.reader(w84.toByteArray());
+        assertEquals(351, r84.readShortBE());
+        assertEquals(1, r84.readByte());
+        assertEquals(0, r84.readShortBE());
     }
 
     @Test
@@ -953,8 +1126,12 @@ class ProtocolBridgeTest {
         LegacyStream cr = LegacyStream.reader(creativeOut.legacyPacket());
         assertEquals(0x2e, cr.readByte());
         assertEquals(0x79, cr.readByte());
+        // En 0.15.10 solo se filtra el slot negativo -206; el Enchanted Book (403) permanece
+        // (existe desde 0.12/0.14) con su NBT ench convertido.
         assertEquals(1, cr.readShortBE());
-        assertEquals(403, cr.readSlot(LegacyProtocol.PROTOCOL_84).id());
+        LegacyStream.LegacySlot book84 = cr.readSlot(LegacyProtocol.PROTOCOL_84);
+        assertEquals(403, book84.id());
+        assertTrue(book84.nbt().length > 0);
 
         // 2) PlayerInventory (windowId=0) con 45 slots se recorta a 36 para 0.15.x
         LegacyStream inv = LegacyStream.writer(256);
@@ -1216,8 +1393,11 @@ class ProtocolBridgeTest {
                     assertTrue(slot.meta() <= 36);
                 }
                 if (slot.id() == 262 && slot.meta() > 0) {
-                    assertFalse(proto.isBefore90());
-                    assertTrue(slot.meta() >= 6 && slot.meta() <= 37);
+                    // 262:6..36 existen desde 0.15.0 (calderos de pocion, version exclusive);
+                    // 262:37 (undecay) desde 0.16 (P91)
+                    assertTrue(slot.meta() >= 6 && slot.meta() <= 36
+                                    || (slot.meta() == 37 && proto.getProtocol() >= 91),
+                            "Unexpected tipped arrow meta=" + slot.meta() + " for proto=" + proto);
                 }
                 if (slot.id() == 403) {
                     assertTrue(slot.nbt().length > 0, "Empty enchanted book leaked on proto=" + proto);

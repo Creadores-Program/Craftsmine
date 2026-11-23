@@ -497,7 +497,17 @@ public final class LegacyStream {
             writeShortBE(slot.meta() < 0 ? 0 : slot.meta());
         } else {
             writeVarInt(slot.id());
-            int encodedMeta = (!protocol.isBefore110() && slot.meta() == -1) ? 0x7FFF : (slot.meta() & 0x7FFF);
+            // Nukkit-MOT v113 envia meta 0x7FFF como wildcard "sin meta" (BinaryStream#putSlotV113,
+            // Nukkit-MOT utils/BinaryStream.java:1598-1612). MySoft solo interpreta 0x7fff como wildcard
+            // en >= 110 (NetworkBinaryStream.php:302-304); en 90..109 un cliente lo lee como damage
+            // 32767 y crashea al renderizar tintes/pociones/flechas (icon lookup fuera de rango).
+            // Normalizar a 0 en 90..109; en 110..112 se conserva el wildcard nativo.
+            int encodedMeta;
+            if (slot.meta() == -1) {
+                encodedMeta = protocol.isBefore110() ? 0 : 0x7FFF;
+            } else {
+                encodedMeta = slot.meta() & 0x7FFF;
+            }
             int aux = (encodedMeta << 8) | (slot.count() & 0xFF);
             writeVarInt(aux);
         }
