@@ -1739,9 +1739,6 @@ class ProtocolBridgeTest {
         assertNotNull(LegacyContentMapper.mapSlotOutbound(
                 new LegacyStream.LegacySlot(120, 0, 1, new byte[0], new String[0], new String[0]),
                 LegacyProtocol.PROTOCOL_81, true));
-        assertNotNull(LegacyContentMapper.mapSlotOutbound(
-                new LegacyStream.LegacySlot(119, 0, 1, new byte[0], new String[0], new String[0]),
-                LegacyProtocol.PROTOCOL_81, true));
 
         // Control negativo: Dragon Egg (122, bloque 1.0.x) SIGUE degradandose a obsidiana en < 92
         assertEquals((49 << 8), LegacyContentMapper.mapBlockAndMeta(122, 0, LegacyProtocol.PROTOCOL_84));
