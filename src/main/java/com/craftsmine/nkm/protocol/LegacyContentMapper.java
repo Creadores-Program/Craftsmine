@@ -150,12 +150,13 @@ public final class LegacyContentMapper {
             }
         }
 
-        // 1.0.x bloques (End / Command Blocks / Magma / Bone / Polar) no existen en < 92 (0.15 - 0.16)
+        // 1.0.x bloques (Command Blocks / Magma / Bone / Polar) no existen en < 92 (0.15 - 0.16)
+        // NOTA: End Stone (121), End Portal Frame (120) y End Portal (119) SI existen en 0.15.x/0.16.x
+        // (MySoft creative_items/81/82 incluye 120 y 121; Nukkit-Retro Block.java:475-477 registra 119/120/121
+        // para clientes 0.15.x), por lo que se envian sin reemplazo hacia cobblestone/sandstone.
+        // El bit 0x04 del End Portal Frame (ojo de ender colocado) es valido en 0.15.x (MySoft EndPortalFrame.php:64).
         if (dst.isBefore92()) {
             switch (id) {
-                case 119 -> { id = 90; m = 0; }    // END_PORTAL -> PORTAL
-                case 120 -> { id = 48; m = 0; }    // END_PORTAL_FRAME -> MOSSY_COBBLE
-                case 121 -> { id = 24; m = 0; }    // END_STONE -> SANDSTONE
                 case 122 -> { id = 49; m = 0; }    // DRAGON_EGG -> OBSIDIAN
                 case 130 -> { id = 54; m = 2; }    // ENDER_CHEST -> CHEST
                 case 137, 188, 189 -> { id = 159; m = 1; } // COMMAND_BLOCK* -> ORANGE_CLAY
@@ -400,7 +401,10 @@ public final class LegacyContentMapper {
         if (dst.isBefore110() && (blockId == 205 || blockId == 207 || (blockId >= 218 && blockId <= 237))) {
             return false;
         }
-        if (dst.isBefore92() && (blockId == 119 || blockId == 120 || blockId == 121 || blockId == 122
+        // End Stone (121), End Portal Frame (120) y End Portal (119) existen como bloque/item desde 0.15.x
+        // (MySoft creative_items/81: 120 y 121 presentes; Nukkit-Retro Item.java:212 registra END_PORTAL=119
+        // y Block.java:475-477 mapea 119/120/121 para clientes 0.12-1.1), por lo que se permiten como item.
+        if (dst.isBefore92() && (blockId == 122
                 || blockId == 130 || blockId == 137 || blockId == 188 || blockId == 189
                 || (blockId >= 200 && blockId <= 217) || blockId == 240 || blockId == 252)) {
             return false;
@@ -429,7 +433,10 @@ public final class LegacyContentMapper {
     }
 
     private static boolean isCreativeBlockSupported(int blockId, int meta, LegacyProtocol dst) {
-        if (blockId == 0 || blockId == 255 || blockId == 250 || blockId == 119 || blockId == 209 || blockId == 246 || blockId == 248 || blockId == 249) {
+        // END_PORTAL (119) es un bloque tecnico que nunca aparece en el inventario creativo vanilla
+        // (MySoft creative_items/81 no lo incluye, igual que el portal del Nether 90), pero si puede
+        // fluir por chunks/updates, por lo que NO se excluye del mapeo de bloques; solo del creativo.
+        if (blockId == 0 || blockId == 255 || blockId == 250 || blockId == 209 || blockId == 246 || blockId == 248 || blockId == 249) {
             return false;
         }
         if (blockId == 84 || blockId == 160 || blockId == 166 || blockId == 176 || blockId == 177 || blockId == 190 || blockId == 191 || blockId == 192
@@ -455,7 +462,9 @@ public final class LegacyContentMapper {
             }
         }
         if (dst.isBefore92()) {
-            if (blockId == 120 || blockId == 121 || blockId == 122 || blockId == 130 || blockId == 137
+            // End Stone (121) y End Portal Frame (120) SI estan en el creativo vanilla de 0.15.x/0.16.x
+            // (MySoft creative_items/81 y /91 los incluyen); se excluyen solo los bloques 1.0.x+
+            if (blockId == 122 || blockId == 130 || blockId == 137
                     || blockId == 188 || blockId == 189 || (blockId >= 200 && blockId <= 217)
                     || blockId == 240 || blockId == 252) {
                 return false;

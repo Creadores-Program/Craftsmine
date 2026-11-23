@@ -1703,6 +1703,54 @@ class ProtocolBridgeTest {
         assertEquals(playerEid, rt.readLongBE());
     }
 
+    @Test
+    void preservesEndStoneAndEndPortalBlocksForLegacyProtocols() {
+        // End Stone (121), End Portal Frame (120, incluido bit del ojo 0x04) y End Portal (119)
+        // existen desde 0.15.x (MySoft creative_items/81-82 incluye 120 y 121; Nukkit-Retro
+        // Block.java:475-477 registra 119/120/121): no deben reemplazarse ni filtrarse.
+        for (LegacyProtocol dst : new LegacyProtocol[]{LegacyProtocol.PROTOCOL_81, LegacyProtocol.PROTOCOL_84, LegacyProtocol.PROTOCOL_91}) {
+            // mapBlockAndMeta: el ID debe preservarse tal cual (ni cobblestone/sandstone/portal)
+            assertEquals((121 << 8), LegacyContentMapper.mapBlockAndMeta(121, 0, dst));            // END_STONE
+            assertEquals((120 << 8) | 0x04, LegacyContentMapper.mapBlockAndMeta(120, 0x04, dst)); // FRAME con ojo
+            assertEquals((120 << 8) | 0x03, LegacyContentMapper.mapBlockAndMeta(120, 0x03, dst)); // FRAME orientacion
+            assertEquals((119 << 8), LegacyContentMapper.mapBlockAndMeta(119, 0, dst));           // END_PORTAL
+        }
+        // En 1.0.x+ (92..113) siguen intactos (nunca hubo remapeo alli)
+        assertEquals((121 << 8), LegacyContentMapper.mapBlockAndMeta(121, 0, LegacyProtocol.PROTOCOL_92));
+        assertEquals((119 << 8), LegacyContentMapper.mapBlockAndMeta(119, 0, LegacyProtocol.PROTOCOL_105));
+        assertEquals((120 << 8) | 0x04, LegacyContentMapper.mapBlockAndMeta(120, 0x04, LegacyProtocol.PROTOCOL_113));
+
+        // mapSlotOutbound inventario normal: End Stone y Frame se conservan (no AIR) en 0.15.x
+        LegacyStream.LegacySlot endStoneItem = LegacyContentMapper.mapSlotOutbound(
+                new LegacyStream.LegacySlot(121, 0, 1, new byte[0], new String[0], new String[0]),
+                LegacyProtocol.PROTOCOL_84, false);
+        assertEquals(121, endStoneItem.id());
+        LegacyStream.LegacySlot frameItem = LegacyContentMapper.mapSlotOutbound(
+                new LegacyStream.LegacySlot(120, 0x04, 1, new byte[0], new String[0], new String[0]),
+                LegacyProtocol.PROTOCOL_84, false);
+        assertEquals(120, frameItem.id());
+        assertEquals(0x04, frameItem.meta());
+
+        // Creativo: End Stone, Frame y End Portal (119) se conservan (no null, no filtrados);
+        // 120/121 estan en el creativo vanilla de 0.15.x (MySoft creative_items/81) y 119 es un
+        // bloque valido del cliente 0.15.x (Nukkit-Retro Item.java:212 / Block.java:475)
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(
+                new LegacyStream.LegacySlot(121, 0, 1, new byte[0], new String[0], new String[0]),
+                LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(
+                new LegacyStream.LegacySlot(120, 0, 1, new byte[0], new String[0], new String[0]),
+                LegacyProtocol.PROTOCOL_81, true));
+        assertNotNull(LegacyContentMapper.mapSlotOutbound(
+                new LegacyStream.LegacySlot(119, 0, 1, new byte[0], new String[0], new String[0]),
+                LegacyProtocol.PROTOCOL_81, true));
+
+        // Control negativo: Dragon Egg (122, bloque 1.0.x) SIGUE degradandose a obsidiana en < 92
+        assertEquals((49 << 8), LegacyContentMapper.mapBlockAndMeta(122, 0, LegacyProtocol.PROTOCOL_84));
+        assertNull(LegacyContentMapper.mapSlotOutbound(
+                new LegacyStream.LegacySlot(122, 0, 1, new byte[0], new String[0], new String[0]),
+                LegacyProtocol.PROTOCOL_84, true));
+    }
+
     private record DummyChannelId(String id) implements ChannelId {
         @Override
         public String asShortText() {
