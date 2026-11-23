@@ -1,9 +1,11 @@
 package com.craftsmine.nkm.listener;
 
 import cn.nukkit.Player;
+import cn.nukkit.entity.data.Skin;
 import cn.nukkit.event.EventHandler;
 import cn.nukkit.event.EventPriority;
 import cn.nukkit.event.Listener;
+import cn.nukkit.event.player.PlayerChangeSkinEvent;
 import cn.nukkit.event.player.PlayerJoinEvent;
 import cn.nukkit.event.player.PlayerQuitEvent;
 import cn.nukkit.event.server.DataPacketReceiveEvent;
@@ -13,9 +15,11 @@ import com.craftsmine.nkm.logging.CraftsmineLogger.Category;
 import com.craftsmine.nkm.network.SessionProtocolRegistry;
 import com.craftsmine.nkm.network.SessionProtocolRegistry.LegacySessionState;
 
+import java.util.Locale;
+
 /**
- * Escucha eventos de Nukkit-MOT para auditar sesiones legadas y registrar trazas
- * en el logger en tiempo real sin interferir en el flujo normal de jugadores modernos.
+ * Escucha eventos de Nukkit-MOT para auditar sesiones legadas, cachear skins reales
+ * y registrar trazas en el logger en tiempo real sin interferir en el flujo normal.
  */
 public final class CraftsmineListener implements Listener {
 
@@ -30,6 +34,8 @@ public final class CraftsmineListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
+        cachePlayerSkin(player, player.getSkin());
+
         LegacySessionState state = registry.getByPlayer(player);
         if (state != null) {
             logger.info(
@@ -50,9 +56,17 @@ public final class CraftsmineListener implements Listener {
         }
     }
 
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerChangeSkin(PlayerChangeSkinEvent event) {
+        Player player = event.getPlayer();
+        Skin skin = event.getSkin() != null ? event.getSkin() : player.getSkin();
+        cachePlayerSkin(player, skin);
+    }
+
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
+        registry.removeCachedSkin(player.getUniqueId(), player.getName());
         LegacySessionState state = registry.getByPlayer(player);
         if (state != null) {
             long secs = Math.max(0L, (System.currentTimeMillis() - state.getConnectedAtMillis()) / 1000L);
@@ -86,5 +100,14 @@ public final class CraftsmineListener implements Listener {
                     )
             );
         }
+    }
+
+    private void cachePlayerSkin(Player player, Skin skin) {
+        if (player == null || skin == null || skin.getSkinData() == null || skin.getSkinData().data == null) {
+            return;
+        }
+        String skinId = skin.getSkinId();
+        boolean slim = skinId != null && skinId.toLowerCase(Locale.ROOT).contains("slim");
+        registry.cacheSkin(player.getUniqueId(), player.getName(), skinId, skin.getSkinData().data, slim);
     }
 }

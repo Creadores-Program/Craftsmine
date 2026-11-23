@@ -1,5 +1,7 @@
 package com.craftsmine.nkm;
 
+import cn.nukkit.Player;
+import cn.nukkit.entity.data.Skin;
 import cn.nukkit.plugin.PluginBase;
 import com.craftsmine.nkm.api.CraftsmineAPI;
 import com.craftsmine.nkm.command.CraftsmineCommand;
@@ -10,6 +12,8 @@ import com.craftsmine.nkm.logging.CraftsmineLogger.Category;
 import com.craftsmine.nkm.metrics.PerformanceMetrics;
 import com.craftsmine.nkm.network.MultiversionBridgeManager;
 import com.craftsmine.nkm.network.SessionProtocolRegistry;
+
+import java.util.Locale;
 
 /**
  * Plugin principal CraftsmineNKM para Nukkit-MOT.
@@ -45,6 +49,14 @@ public final class CraftsmineNKMPlugin extends PluginBase {
         getServer().getPluginManager().registerEvents(
                 new CraftsmineListener(sessionRegistry, craftsmineLogger), this
         );
+        for (Player online : getServer().getOnlinePlayers().values()) {
+            Skin skin = online.getSkin();
+            if (skin != null && skin.getSkinData() != null && skin.getSkinData().data != null) {
+                String skinId = skin.getSkinId();
+                boolean slim = skinId != null && skinId.toLowerCase(Locale.ROOT).contains("slim");
+                sessionRegistry.cacheSkin(online.getUniqueId(), online.getName(), skinId, skin.getSkinData().data, slim);
+            }
+        }
         getServer().getCommandMap().register(
                 "craftsmine",
                 new CraftsmineCommand(this, craftsmineConfig, craftsmineLogger, sessionRegistry, metrics)

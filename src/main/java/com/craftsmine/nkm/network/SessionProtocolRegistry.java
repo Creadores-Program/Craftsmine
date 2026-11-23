@@ -5,15 +5,28 @@ import com.craftsmine.nkm.protocol.LegacyProtocol;
 import io.netty.channel.ChannelId;
 
 import java.net.SocketAddress;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registro concurrente de sesiones legadas activas (Protocolo 80 - 112).
+ * Registro concurrente de sesiones legadas activas (Protocolo 80 - 112),
+ * estado de entidades por sesion y cache de skins reales de jugadores.
  */
 public final class SessionProtocolRegistry {
+
+    public record SkinSnapshot(String skinId, byte[] skinData, boolean slim) {
+    }
+
+    public record EntitySpawnInfo(int rawType, int mappedType) {
+        public boolean isReplaced() {
+            return rawType != mappedType;
+        }
+    }
 
     public static final class LegacySessionState {
         private final ChannelId channelId;
@@ -23,7 +36,9 @@ public final class SessionProtocolRegistry {
         private volatile String username = "Desconocido";
         private volatile boolean bypassedResourcePacks;
         private volatile boolean modernDetached;
+        private volatile long playerEntityId = -1L;
         private final long connectedAtMillis;
+        private final Map<Long, EntitySpawnInfo> spawnedEntities = new ConcurrentHashMap<>();
 
         public LegacySessionState(ChannelId channelId, SocketAddress remoteAddress, int rawProtocol) {
             this.channelId = channelId;
@@ -80,13 +95,42 @@ public final class SessionProtocolRegistry {
             this.modernDetached = modernDetached;
         }
 
+        public long getPlayerEntityId() {
+            return playerEntityId;
+        }
+
+        public void setPlayerEntityId(long playerEntityId) {
+            this.playerEntityId = playerEntityId;
+        }
+
         public long getConnectedAtMillis() {
             return connectedAtMillis;
+        }
+
+        public void trackEntity(long eid, int rawType, int mappedType) {
+            if (spawnedEntities.size() > 8192) {
+                spawnedEntities.clear();
+            }
+            spawnedEntities.put(eid, new EntitySpawnInfo(rawType, mappedType));
+        }
+
+        public EntitySpawnInfo getEntity(long eid) {
+            return spawnedEntities.get(eid);
+        }
+
+        public void removeEntity(long eid) {
+            spawnedEntities.remove(eid);
+        }
+
+        public void clearEntities() {
+            spawnedEntities.clear();
         }
     }
 
     private final Map<ChannelId, LegacySessionState> byChannel = new ConcurrentHashMap<>();
     private final Map<String, LegacySessionState> byUsername = new ConcurrentHashMap<>();
+    private final Map<UUID, SkinSnapshot> playerSkins = new ConcurrentHashMap<>();
+    private final Map<String, SkinSnapshot> playerSkinsByName = new ConcurrentHashMap<>();
 
     public LegacySessionState registerOrUpdate(ChannelId channelId, SocketAddress remote, int rawProtocol, String username) {
         LegacySessionState state = byChannel.compute(channelId, (id, existing) -> {
@@ -98,7 +142,7 @@ public final class SessionProtocolRegistry {
         });
         if (username != null && !username.isBlank()) {
             state.setUsername(username);
-            byUsername.put(username.toLowerCase(), state);
+            byUsername.put(username.toLowerCase(Locale.ROOT), state);
         }
         return state;
     }
@@ -111,15 +155,57 @@ public final class SessionProtocolRegistry {
         if (player == null || player.getName() == null) {
             return null;
         }
-        return byUsername.get(player.getName().toLowerCase());
+        return byUsername.get(player.getName().toLowerCase(Locale.ROOT));
     }
 
     public LegacySessionState removeByChannel(ChannelId channelId) {
         LegacySessionState removed = byChannel.remove(channelId);
-        if (removed != null && removed.getUsername() != null) {
-            byUsername.remove(removed.getUsername().toLowerCase(), removed);
+        if (removed != null) {
+            removed.clearEntities();
+            if (removed.getUsername() != null) {
+                byUsername.remove(removed.getUsername().toLowerCase(Locale.ROOT), removed);
+            }
         }
         return removed;
+    }
+
+    public void cacheSkin(UUID uuid, String username, String skinId, byte[] skinData, boolean slim) {
+        if (skinData == null || skinData.length == 0) {
+            return;
+        }
+        SkinSnapshot snap = new SkinSnapshot(
+                skinId == null || skinId.isBlank() ? (slim ? "Standard_CustomSlim" : "Standard_Custom") : skinId,
+                Arrays.copyOf(skinData, skinData.length),
+                slim
+        );
+        if (uuid != null) {
+            playerSkins.put(uuid, snap);
+        }
+        if (username != null && !username.isBlank()) {
+            playerSkinsByName.put(username.toLowerCase(Locale.ROOT), snap);
+        }
+    }
+
+    public SkinSnapshot getSkin(UUID uuid, String username) {
+        if (uuid != null) {
+            SkinSnapshot byUuid = playerSkins.get(uuid);
+            if (byUuid != null) {
+                return byUuid;
+            }
+        }
+        if (username != null && !username.isBlank()) {
+            return playerSkinsByName.get(username.toLowerCase(Locale.ROOT));
+        }
+        return null;
+    }
+
+    public void removeCachedSkin(UUID uuid, String username) {
+        if (uuid != null) {
+            playerSkins.remove(uuid);
+        }
+        if (username != null && !username.isBlank()) {
+            playerSkinsByName.remove(username.toLowerCase(Locale.ROOT));
+        }
     }
 
     public Collection<LegacySessionState> getActiveSessions() {
@@ -129,5 +215,7 @@ public final class SessionProtocolRegistry {
     public void clear() {
         byChannel.clear();
         byUsername.clear();
+        playerSkins.clear();
+        playerSkinsByName.clear();
     }
 }

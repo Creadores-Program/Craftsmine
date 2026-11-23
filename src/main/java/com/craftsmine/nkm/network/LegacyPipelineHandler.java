@@ -179,7 +179,7 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                         canonicalSubs.add(sub);
                     } else if (sub.length > 0) {
                         try {
-                            InboundResult res = PacketTranslator.translateInbound(sub, state.getProtocol());
+                            InboundResult res = PacketTranslator.translateInbound(sub, state.getProtocol(), state);
                             if (!res.suppress() && res.canonicalPacket() != null) {
                                 canonicalSubs.add(res.canonicalPacket());
                             }
@@ -219,7 +219,7 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                 }
                 int legacyPid = rawSub[0] & 0xFF;
                 try {
-                    InboundResult translated = PacketTranslator.translateInbound(rawSub, sourceProto);
+                    InboundResult translated = PacketTranslator.translateInbound(rawSub, sourceProto, state);
                     if (translated.suppress() || translated.canonicalPacket() == null) {
                         metrics.recordDroppedPacket();
                         if (!config.isSuppressUnknownPackets()) {
@@ -312,7 +312,7 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                 int v113Pid = v113Sub[0] & 0xFF;
                 try {
                     OutboundResult translated = PacketTranslator.translateOutbound(
-                            v113Sub, targetProto, config.isAutoBypassResourcePacks015()
+                            v113Sub, targetProto, config.isAutoBypassResourcePacks015(), registry, state
                     );
 
                     if (translated.synthesizeResourceComplete() && !state.isBypassedResourcePacks()) {

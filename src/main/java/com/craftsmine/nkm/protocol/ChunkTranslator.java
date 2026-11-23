@@ -142,7 +142,7 @@ public final class ChunkTranslator {
         out.writeBytes(blockLight);
         out.writeBytes(heightMap);
         for (int i = 0; i < 256; i++) {
-            int argb = biomeIdToArgb(biomeIds[i] & 0xFF);
+            int argb = biomeIdToArgb(sanitizeBiomeId(biomeIds[i] & 0xFF, target));
             out.writeIntBE(argb);
         }
         out.writeIntLE(0); // extraData count (0)
@@ -180,7 +180,12 @@ public final class ChunkTranslator {
         }
         // Heightmap (512B) + biomes (256B) + borderBlocks
         if (in.remaining() >= 512 + 256) {
-            out.writeBytes(in.readBytes(512 + 256));
+            out.writeBytes(in.readBytes(512));
+            byte[] biomes = in.readBytes(256);
+            for (int i = 0; i < 256; i++) {
+                biomes[i] = (byte) sanitizeBiomeId(biomes[i] & 0xFF, target);
+            }
+            out.writeBytes(biomes);
         }
         if (in.remaining() >= 1) {
             int borderCount = in.readByte();
@@ -205,8 +210,8 @@ public final class ChunkTranslator {
     private static void patchSubChunkBlocks(byte[] subIds, byte[] subData, LegacyProtocol target) {
         for (int idx = 0; idx < 4096; idx++) {
             int id = subIds[idx] & 0xFF;
-            if (id < 19 && id != 1 && id != 5 && id != 6) {
-                continue; // Camino rapido para aire, agua, bedrock, pasto, piedra comun
+            if (id == 0) {
+                continue;
             }
             int nibbleIdx = idx >> 1;
             int nibbleShift = (idx & 1) << 2;
@@ -224,12 +229,26 @@ public final class ChunkTranslator {
         }
     }
 
+    private static int sanitizeBiomeId(int biomeId, LegacyProtocol target) {
+        if (biomeId >= 178 && biomeId <= 186) {
+            return 8; // Biomas modernos del Nether (Warped Forest, Crimson Forest, etc.) -> Hell (8)
+        }
+        if (target.isBefore90() && biomeId > 39) {
+            return 1; // Plains fallback seguro en 0.15.x
+        }
+        if (biomeId > 39 && (biomeId < 129 || biomeId > 167)) {
+            return 1;
+        }
+        return biomeId;
+    }
+
     private static int biomeIdToArgb(int biomeId) {
         return switch (biomeId) {
             case 2, 17 -> 0xFFBFB755; // Desert
             case 4, 18 -> 0xFF79C05A; // Forest
             case 5, 19 -> 0xFF596651; // Taiga
             case 6 -> 0xFF6A7039;     // Swampland
+            case 8, 178, 179, 180, 181 -> 0xFF905957; // Nether / Hell
             case 12, 13 -> 0xFF80B497; // Ice Plains
             case 14, 15 -> 0xFF55C93F; // Mushroom
             case 21, 22, 23 -> 0xFF59C93C; // Jungle

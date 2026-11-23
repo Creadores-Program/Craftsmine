@@ -13,6 +13,18 @@ public final class PacketIdMapper {
 
     public static final int UNMAPPED = -1;
 
+    /**
+     * MySoft PacketPool no define tabla para el protocolo 90: getPacketIdByMagic() (PacketPool.php:429-442)
+     * resuelve hacia abajo hasta PacketsIds81, donde PLAYER_ACTION_PACKET = 0x20 (PacketsIds81.php:57),
+     * aunque la serializacion de campos ya es VarInt/VarLong (umbral >= 90, PlayerActionPacket.php:94-99).
+     * La familia V0_16 (tabla v91) mapea 0x24 -> PLAYER_ACTION y 0x20 -> MOB_EQUIPMENT, de modo que un
+     * cliente 0.15.90 que presiona Shift enviaba 0x20 con action=11/12 (START/STOP_SNEAK, mismos valores
+     * en la tabla PROTOCOL_81 de PlayerActionIds.php:372-373 y en v113) y el bridge lo decodificaba como
+     * MobEquipment: el sneak y toda accion de jugador se perdia en protocolo 90.
+     * Mismo patron P90 ya aplicado a RemoveEntity (0x0c) y TakeItemEntity (0x0e) en PacketTranslator.
+     */
+    private static final int PLAYER_ACTION_LEGACY_PID_P90 = 0x20;
+
     private static final Map<LegacyProtocol.Family, int[]> LEGACY_TO_V113 = new EnumMap<>(LegacyProtocol.Family.class);
     private static final Map<LegacyProtocol.Family, int[]> V113_TO_LEGACY = new EnumMap<>(LegacyProtocol.Family.class);
 
@@ -394,11 +406,21 @@ public final class PacketIdMapper {
 
     public static int toV113(LegacyProtocol protocol, int legacyPacketId) {
         int id = legacyPacketId & 0xFF;
+        // Protocolo 90 (0.15.90): MySoft resuelve los IDs con la tabla 81 (sin entrada propia en
+        // PacketPool.php:115-124), donde PLAYER_ACTION_PACKET = 0x20. Corrige el Shift/sneak perdido:
+        // sin esto, 0x20 caia en MOB_EQUIPMENT de la tabla v91 y la accion nunca llegaba al servidor.
+        if (protocol.getProtocol() == 90 && id == PLAYER_ACTION_LEGACY_PID_P90) {
+            return ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF;
+        }
         return LEGACY_TO_V113.get(protocol.getFamily())[id];
     }
 
     public static int toLegacy(LegacyProtocol protocol, int v113PacketId) {
         int id = v113PacketId & 0xFF;
+        // Simetrico a toV113: PLAYER_ACTION v113 debe emitirse como 0x20 (tabla 81) en protocolo 90.
+        if (protocol.getProtocol() == 90 && id == (ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF)) {
+            return PLAYER_ACTION_LEGACY_PID_P90;
+        }
         return V113_TO_LEGACY.get(protocol.getFamily())[id];
     }
 }

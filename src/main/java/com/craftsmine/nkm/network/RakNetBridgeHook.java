@@ -124,7 +124,10 @@ public final class RakNetBridgeHook {
         pipeline.addFirst(PRE_INIT_HOOK_NAME, new ChannelInboundHandlerAdapter() {
             private void ensureInjected(ChannelHandlerContext ctx) {
                 if (tryInjectChildNow(ctx.channel()) && ctx.pipeline().get(PRE_INIT_HOOK_NAME) != null) {
-                    ctx.pipeline().remove(this);
+                    try {
+                        ctx.pipeline().remove(this);
+                    } catch (java.util.NoSuchElementException ignored) {
+                    }
                 }
             }
 
@@ -150,6 +153,12 @@ public final class RakNetBridgeHook {
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
                 ensureInjected(ctx);
                 ctx.fireChannelRead(msg);
+            }
+
+            @Override
+            public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+                registry.removeByChannel(ctx.channel().id());
+                ctx.fireChannelInactive();
             }
         });
     }
@@ -189,7 +198,7 @@ public final class RakNetBridgeHook {
     }
 
     private boolean tryInjectChildNow(Channel child) {
-        if (child == null || !child.isOpen()) {
+        if (child == null || !child.isOpen() || !child.isRegistered()) {
             return false;
         }
         ChannelPipeline pipeline = child.pipeline();
@@ -210,7 +219,11 @@ public final class RakNetBridgeHook {
             }
         }
         LegacyPipelineHandler handler = new LegacyPipelineHandler(registry, config, logger, metrics, rakVersion);
-        pipeline.addBefore("nukkit-handler", LegacyPipelineHandler.HANDLER_NAME, handler);
+        try {
+            pipeline.addBefore("nukkit-handler", LegacyPipelineHandler.HANDLER_NAME, handler);
+        } catch (IllegalArgumentException alreadyAdded) {
+            return pipeline.get(LegacyPipelineHandler.HANDLER_NAME) != null;
+        }
         logger.debug(
                 Category.CONNECTION,
                 "Pipeline CraftsmineNKM inyectado en " + child.remoteAddress()

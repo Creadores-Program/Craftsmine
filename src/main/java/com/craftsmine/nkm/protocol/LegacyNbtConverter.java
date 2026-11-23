@@ -30,12 +30,36 @@ public final class LegacyNbtConverter {
             "ItemFrame", "PistonArm", "Skull", "Music"
     );
 
-    private static final Set<String> SUPPORTED_TILES_90_TO_109 = Set.of(
+    private static final Set<String> SUPPORTED_TILES_90_91 = Set.of(
+            "Chest", "Sign", "Furnace", "MobSpawner", "FlowerPot",
+            "BrewingStand", "EnchantTable", "Cauldron", "Hopper",
+            "Dropper", "Dispenser", "DaylightDetector", "Comparator",
+            "ItemFrame", "PistonArm", "Skull", "Music", "Beacon"
+    );
+
+    private static final Set<String> SUPPORTED_TILES_92_102 = Set.of(
             "Chest", "Sign", "Furnace", "MobSpawner", "FlowerPot",
             "BrewingStand", "EnchantTable", "Cauldron", "Hopper",
             "Dropper", "Dispenser", "DaylightDetector", "Comparator",
             "ItemFrame", "PistonArm", "Skull", "Music",
-            "Beacon", "EnderChest", "EndGateway", "CommandBlock", "StructureBlock"
+            "Beacon", "EnderChest", "EndGateway"
+    );
+
+    private static final Set<String> SUPPORTED_TILES_105_109 = Set.of(
+            "Chest", "Sign", "Furnace", "MobSpawner", "FlowerPot",
+            "BrewingStand", "EnchantTable", "Cauldron", "Hopper",
+            "Dropper", "Dispenser", "DaylightDetector", "Comparator",
+            "ItemFrame", "PistonArm", "Skull", "Music",
+            "Beacon", "EnderChest", "EndGateway", "CommandBlock"
+    );
+
+    private static final Set<String> SUPPORTED_TILES_110_112 = Set.of(
+            "Chest", "Sign", "Furnace", "MobSpawner", "FlowerPot",
+            "BrewingStand", "EnchantTable", "Cauldron", "Hopper",
+            "Dropper", "Dispenser", "DaylightDetector", "Comparator",
+            "ItemFrame", "PistonArm", "Skull", "Music",
+            "Beacon", "EnderChest", "EndGateway", "CommandBlock",
+            "ShulkerBox", "Bed"
     );
 
     private LegacyNbtConverter() {
@@ -158,19 +182,33 @@ public final class LegacyNbtConverter {
             if (!SUPPORTED_TILES_PRE_90.contains(tileId)) {
                 return null;
             }
-        } else if (dst.isBefore110()) {
-            if (!SUPPORTED_TILES_90_TO_109.contains(tileId) && !"ShulkerBox".equals(tileId) && !"Bed".equals(tileId)) {
+        } else if (dst.isBefore92()) {
+            if (!SUPPORTED_TILES_90_91.contains(tileId)) {
                 return null;
             }
-            if ("ShulkerBox".equals(tileId) || "Bed".equals(tileId)) {
+        } else if (dst.getProtocol() < 105) {
+            if (!SUPPORTED_TILES_92_102.contains(tileId)) {
+                return null;
+            }
+        } else if (dst.isBefore110()) {
+            if (!SUPPORTED_TILES_105_109.contains(tileId)) {
+                return null;
+            }
+        } else if (dst.needsTranslation()) {
+            if (!SUPPORTED_TILES_110_112.contains(tileId)) {
                 return null;
             }
         }
 
         CompoundTag clean = source.copy();
-        if ("Skull".equals(tileId) && dst.isBefore110()) {
+        if ("Skull".equals(tileId) && dst.isBefore92()) {
             byte skullType = (byte) clean.getByte("SkullType");
             if (skullType > 4 || skullType < 0) {
+                clean.putByte("SkullType", 0);
+            }
+        } else if ("Skull".equals(tileId) && dst.needsTranslation()) {
+            byte skullType = (byte) clean.getByte("SkullType");
+            if (skullType > 5 || skullType < 0) {
                 clean.putByte("SkullType", 0);
             }
         }
@@ -191,12 +229,15 @@ public final class LegacyNbtConverter {
         }
 
         if ("ItemFrame".equals(tileId) && clean.contains("Item") && clean.get("Item") instanceof CompoundTag itemTag) {
-            if (dst.isBefore110() && itemTag.get("map_uuid") instanceof LongTag mapUuidLong) {
+            if (dst.needsTranslation() && itemTag.get("map_uuid") instanceof LongTag mapUuidLong) {
                 long v = mapUuidLong.data;
                 itemTag.remove("map_uuid");
                 itemTag.putString("map_uuid", Long.toString(v));
             }
             sanitizeNestedSerializedItem(itemTag, dst);
+            if (!itemTag.contains("id") || itemTag.getShort("id") <= 0) {
+                clean.remove("Item");
+            }
         }
 
         if (clean.contains("Items") && clean.get("Items") instanceof ListTag<?> itemsList) {
@@ -243,14 +284,14 @@ public final class LegacyNbtConverter {
             tag.remove("CanPlaceOn");
             tag.remove("CanDestroy");
         }
-        if (dst.isBefore90()) {
-            tag.remove("RepairCost");
+        if (dst.needsTranslation()) {
+            tag.remove("Fireworks");
+            tag.remove("FireworksItem");
             tag.remove("CustomColor");
-            if (tag.contains("Fireworks") || tag.contains("FireworksItem")) {
-                tag.remove("Fireworks");
-                tag.remove("FireworksItem");
-            }
-            // Asegurar enchantment IDs dentro de limites <= 24 (0.15.x)
+            tag.remove("customColor");
+
+            // Limitar enchantment IDs: <= 24 en < 110, <= 26 en 110..112 (MySoft 110 creative)
+            int maxEnchantId = dst.isBefore110() ? 24 : 26;
             if (tag.contains("ench") && tag.get("ench") instanceof ListTag<?> enchList) {
                 @SuppressWarnings("unchecked")
                 ListTag<CompoundTag> filtered = new ListTag<>("ench");
@@ -258,7 +299,7 @@ public final class LegacyNbtConverter {
                     if (enchList.get(i) instanceof CompoundTag e) {
                         short eid = (short) e.getShort("id");
                         short lvl = (short) Math.max(1, Math.min(10, e.getShort("lvl")));
-                        if (eid >= 0 && eid <= 24) {
+                        if (eid >= 0 && eid <= maxEnchantId) {
                             CompoundTag copy = new CompoundTag();
                             copy.put("id", new ShortTag("id", eid));
                             copy.put("lvl", new ShortTag("lvl", lvl));
@@ -272,7 +313,15 @@ public final class LegacyNbtConverter {
                     tag.putList(filtered);
                 }
             }
-            // Limitar display.Name demasiado largo o NPE
+
+            if (tag.contains("map_uuid") && tag.get("map_uuid") instanceof LongTag lt) {
+                long val = lt.data;
+                tag.remove("map_uuid");
+                tag.put("map_uuid", new StringTag("map_uuid", Long.toString(val)));
+            }
+        }
+        if (dst.isBefore90()) {
+            tag.remove("RepairCost");
             if (tag.contains("display") && tag.get("display") instanceof CompoundTag display) {
                 if (display.contains("Name")) {
                     String name = display.getString("Name");
@@ -287,12 +336,6 @@ public final class LegacyNbtConverter {
             if (tag.contains("BlockEntityTag")) {
                 tag.remove("BlockEntityTag");
             }
-        }
-        // Asegurar IntTag valido para RepairCost / map_uuid si queda algun long tag incompatible
-        if (dst.isBefore90() && tag.contains("map_uuid") && tag.get("map_uuid") instanceof LongTag lt) {
-            long val = lt.data;
-            tag.remove("map_uuid");
-            tag.put("map_uuid", new StringTag("map_uuid", Long.toString(val)));
         }
     }
 
