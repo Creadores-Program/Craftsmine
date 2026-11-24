@@ -60,9 +60,14 @@ public final class LegacyContentMapper {
                     id = 34;
                     m = meta & 0x07;
                 }
-                case 1220 -> { // WITHER_SKELETON_SKULL (BlockID.java:825) -> SKULL_BLOCK (144)
+                case 1220, 1221, 1222, 1223 -> { // WITHER_SKELETON_SKULL (1220, BlockID.java:825), ZOMBIE_HEAD
+                    // (1221, BlockID.java:826), PLAYER_HEAD (1222, BlockID.java:827) y CREEPER_HEAD
+                    // (1223, BlockID.java:828) -> SKULL_BLOCK (144). Bloques modernos de BlockSkullWitherSkeleton /
+                    // BlockHeadZombie / BlockHeadPlayer / BlockHeadCreeper (todos extienden BlockSkullSkeleton).
                     // meta = face index 0..5 (BlockSkullSkeleton.java:104); el tipo va en el tile Skull
-                    // "SkullType" (Nukkit-Retro BlockSkull.java:69,79), ya sanitizado por LegacyNbtConverter.
+                    // "SkullType" con la MISMA numeracion que legacy 0.15..1.1: ZOMBIE=2, PLAYER=3, CREEPER=4
+                    // (Nukkit-Retro BlockSkull.java:69,79 y MySoft tile/Skull.php:40), ya sanitizado por
+                    // LegacyNbtConverter.
                     id = 144;
                     m = meta & 0x07;
                 }
