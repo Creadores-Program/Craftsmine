@@ -50,8 +50,32 @@ public final class LegacyContentMapper {
 
         // Bloques 1.2+ / Education / wrapped (>255) que nunca deben llegar crudos a < 113
         if (blockId < 0 || blockId > 255) {
-            id = 1; // Stone fallback si llega un bloque moderno o negativo sin convertir
-            m = 0;
+            // Nukkit-MOT Level.sendBlocks envia bl.getId() crudo a protocolos <= 201 y algunos bloques
+            // modernos usan IDs internos >= 256 que tienen equivalente exacto en MCPE 0.15..1.1:
+            switch (blockId) {
+                case 472 -> { // PISTON_HEAD_STICKY (BlockID.java:428) -> PISTON_ARM_COLLISION (34)
+                    // Nukkit-Retro coloca el brazo de ambos pistones como BlockPistonHead(this.meta) = 34
+                    // (BlockPistonBase.java:202), meta = facing 0..5 sin bit sticky (BlockPistonHead.java:76-83);
+                    // la pegajosidad la transporta el tile PistonArm "Sticky" (ya reenviado por LegacyNbtConverter).
+                    id = 34;
+                    m = meta & 0x07;
+                }
+                case 1220, 1221, 1222, 1223 -> { // WITHER_SKELETON_SKULL (1220, BlockID.java:825), ZOMBIE_HEAD
+                    // (1221, BlockID.java:826), PLAYER_HEAD (1222, BlockID.java:827) y CREEPER_HEAD
+                    // (1223, BlockID.java:828) -> SKULL_BLOCK (144). Bloques modernos de BlockSkullWitherSkeleton /
+                    // BlockHeadZombie / BlockHeadPlayer / BlockHeadCreeper (todos extienden BlockSkullSkeleton).
+                    // meta = face index 0..5 (BlockSkullSkeleton.java:104); el tipo va en el tile Skull
+                    // "SkullType" con la MISMA numeracion que legacy 0.15..1.1: ZOMBIE=2, PLAYER=3, CREEPER=4
+                    // (Nukkit-Retro BlockSkull.java:69,79 y MySoft tile/Skull.php:40), ya sanitizado por
+                    // LegacyNbtConverter.
+                    id = 144;
+                    m = meta & 0x07;
+                }
+                default -> {
+                    id = 1; // Stone fallback si llega un bloque moderno o negativo sin convertir
+                    m = 0;
+                }
+            }
         } else {
             switch (id) {
                 case 84 -> { // JUKEBOX (1.2+) -> NOTEBLOCK
