@@ -37,8 +37,6 @@ public final class SessionProtocolRegistry {
         private volatile boolean bypassedResourcePacks;
         private volatile boolean modernDetached;
         private volatile long playerEntityId = -1L;
-        /** Dimension (0..2) que el cliente legado cree habitar; -1 hasta conocerla por StartGame. */
-        private volatile int clientDimension = -1;
         private final long connectedAtMillis;
         private final Map<Long, EntitySpawnInfo> spawnedEntities = new ConcurrentHashMap<>();
 
@@ -103,14 +101,6 @@ public final class SessionProtocolRegistry {
 
         public void setPlayerEntityId(long playerEntityId) {
             this.playerEntityId = playerEntityId;
-        }
-
-        public int getClientDimension() {
-            return clientDimension;
-        }
-
-        public void setClientDimension(int clientDimension) {
-            this.clientDimension = clientDimension;
         }
 
         public long getConnectedAtMillis() {

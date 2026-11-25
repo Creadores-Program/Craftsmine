@@ -40,23 +40,13 @@ public final class PacketTranslator {
         }
     }
 
-    public record OutboundResult(
-            byte[] legacyPacket,
-            boolean suppress,
-            boolean synthesizeResourceComplete,
-            List<byte[]> extraLegacyPackets
-    ) {
+    public record OutboundResult(byte[] legacyPacket, boolean suppress, boolean synthesizeResourceComplete) {
         public static OutboundResult forward(byte[] legacyPacket) {
-            return new OutboundResult(legacyPacket, false, false, List.of());
-        }
-
-        /** Paquete principal + paquetes legacy sinteticos que se envian inmediatamente despues en el mismo batch. */
-        public static OutboundResult forwardWithExtra(byte[] legacyPacket, List<byte[]> extraLegacyPackets) {
-            return new OutboundResult(legacyPacket, false, false, extraLegacyPackets);
+            return new OutboundResult(legacyPacket, false, false);
         }
 
         public static OutboundResult drop(boolean synthesizeResourceComplete) {
-            return new OutboundResult(null, true, synthesizeResourceComplete, List.of());
+            return new OutboundResult(null, true, synthesizeResourceComplete);
         }
     }
 
@@ -224,14 +214,6 @@ public final class PacketTranslator {
             case 0x0e -> {
                 return translateRemoveEntityOutbound(payload, target, state);
             }
-            // ChangeDimension: devuelve paquete completo + secuencia de completado sintetica
-            // (PlayStatus PLAYER_SPAWN / PlayerAction ACK) para clientes sin End (< 100)
-            case 0x3d -> {
-                if (state != null) {
-                    state.clearEntities();
-                }
-                return translateChangeDimensionOutbound(payload, target, state);
-            }
             case 0x0f -> {
                 return translateAddItemEntityOutbound(payload, target);
             }
@@ -318,6 +300,12 @@ public final class PacketTranslator {
             case 0x37 -> translateAdventureSettingsOutbound(payload, target);
             case 0x3a -> ChunkTranslator.translateOutbound(payload, target);
             case 0x3c -> translateSetDifficultyOutbound(payload, target);
+            case 0x3d -> {
+                if (state != null) {
+                    state.clearEntities();
+                }
+                yield translateChangeDimensionOutbound(payload, target);
+            }
             case 0x3e -> translateSetPlayerGameTypeOutbound(payload, target);
             case 0x3f -> translatePlayerListOutbound(payload, target, registry);
             case 0x42 -> translateSpawnExperienceOrbOutbound(payload, target);
@@ -892,12 +880,6 @@ public final class PacketTranslator {
         boolean isTrial = in.remaining() > 0 && in.readBoolean();
         long currentTick = in.remaining() >= 8 ? in.readLongLE() : 0L;
         int safeDim = clampDimension(dimension, dst);
-        if (state != null) {
-            // Dimension inicial que el cliente legado cree habitar (StartGamePacket dimension,
-            // misma semantica que ChangeDimensionPacket; MySoft Player.php:2949 la envia
-            // tambien clampada por getClientFriendlyDimension).
-            state.setClientDimension(safeDim);
-        }
 
         LegacyStream out = LegacyStream.writer(256);
         if (dst.isBefore90()) {
@@ -1934,87 +1916,24 @@ public final class PacketTranslator {
         return out.toByteArray();
     }
 
-    private static OutboundResult translateChangeDimensionOutbound(byte[] payload, LegacyProtocol dst, LegacySessionState state) {
-        int legacyId = PacketIdMapper.toLegacy(dst, ProtocolInfo_v113.CHANGE_DIMENSION_PACKET & 0xFF);
-        if (legacyId == PacketIdMapper.UNMAPPED) {
-            return OutboundResult.drop(false);
-        }
+    private static byte[] translateChangeDimensionOutbound(byte[] payload, LegacyProtocol dst) {
         LegacyStream in = LegacyStream.reader(payload);
         int dimension = in.readVarInt();
         float[] pos = in.readVector3(LegacyProtocol.PROTOCOL_113);
         boolean respawn = in.remaining() > 0 && in.readBoolean();
         int safeDim = clampDimension(dimension, dst);
 
-        // En protocolos sin End (< 100) el End (2) se colapsa via clampDimension a la dimension
-        // par (0 Overworld), igual que MySoft getClientFriendlyDimension (Player.php:1727-1729:
-        // solo expone Overworld 0 / Nether 1). Pero Nukkit-MOT si tiene mundos del End (P113,
-        // Player.java:9376-9397) y envia ChangeDimension real con dimension 2: cuando el jugador
-        // entra al End desde el Overworld, el clamp produce un cambio hacia "la misma" dimension
-        // en la que el cliente ya esta, el cliente legacy lo ignora y la pantalla "Construyendo
-        // terreno" queda bloqueada infinitamente. Se alterna a la otra dimension cliente valida
-        // (0 <-> 1) para que el cliente ejecute siempre un cambio efectivo y recargue el mundo.
-        if (state != null && dst.getProtocol() < 100 && state.getClientDimension() == safeDim) {
-            safeDim = safeDim == 0 ? 1 : 0;
-        }
-        if (state != null) {
-            state.setClientDimension(safeDim);
-        }
-
         LegacyStream out = LegacyStream.writer(20);
         if (dst.isBefore90()) {
             // MySoft ChangeDimensionPacket (< 90): byte(dimension) + boolean(respawn), SIN Vector3
             out.writeByte(safeDim);
             out.writeBoolean(respawn);
-        } else {
-            out.writeVarInt(safeDim);
-            out.writeVector3(dst, pos[0], pos[1], pos[2]);
-            out.writeBoolean(respawn);
+            return out.toByteArray();
         }
-        byte[] dimPacket = withLegacyPid(legacyId, out.toByteArray());
-
-        // Ronda 2: el cliente 0.15.x/0.16.x no cierra solo la pantalla "Construyendo terreno"
-        // tras un ChangeDimensionPacket: necesita una senal de completado. Referencias reales:
-        // - GenisysPro Player.php:914-924: envia PlayStatusPacket(PLAYER_SPAWN=3) INMEDIATAMENTE
-        //   despues de ChangeDimensionPacket (mismo patron para respawn, Player.php:1070-1073).
-        // - Nukkit-Retro Player.java:4774-4801 (experimento //broken): ChangeDimension ->
-        //   forceSendEmptyChunks() -> PlayStatusPacket(PLAYER_SPAWN) diferido: mismo desbloqueo.
-        // - MySoft Player.php:1246-1253 ("fast world loading"): PlayerActionPacket con
-        //   ACTION_DIMENSION_CHANGE_ACK (14) del servidor al cliente tras ChangeDimensionPacket.
-        // Nukkit-MOT (P113) no envia ninguna de las dos (Player.java:9376-9397 y hasSpawnChunks
-        // sin reset en Player.java:341/1688-1690), por eso el cliente legacy se cuelga.
-        // Se sintetizan ambas senales para protocolos < 100; >= 100 (1.0+ con End) queda intacto.
-        List<byte[]> extras = new ArrayList<>(2);
-        if (dst.getProtocol() < 100) {
-            int playStatusId = PacketIdMapper.toLegacy(dst, ProtocolInfo_v113.PLAY_STATUS_PACKET & 0xFF);
-            if (playStatusId != PacketIdMapper.UNMAPPED) {
-                LegacyStream status = LegacyStream.writer(8);
-                status.writeByte(playStatusId & 0xFF);
-                status.writeIntBE(3); // MySoft PlayStatusPacket.php:54-56 (putInt BE) / PLAYER_SPAWN = 3
-                extras.add(status.toByteArray());
-            }
-            if (state != null && state.getPlayerEntityId() > 0) {
-                int actionId = PacketIdMapper.toLegacy(dst, ProtocolInfo_v113.PLAYER_ACTION_PACKET & 0xFF);
-                if (actionId != PacketIdMapper.UNMAPPED) {
-                    LegacyStream v113Ack = LegacyStream.writer(24);
-                    v113Ack.writeEntityRuntimeId(LegacyProtocol.PROTOCOL_113, state.getPlayerEntityId());
-                    v113Ack.writeVarInt(14); // PlayerActionPacket.ACTION_DIMENSION_CHANGE_ACK
-                    v113Ack.writeBlockPosition(LegacyProtocol.PROTOCOL_113,
-                            (int) Math.floor(pos[0]), (int) Math.floor(pos[1]), (int) Math.floor(pos[2]));
-                    v113Ack.writeVarInt(0); // face
-                    extras.add(withLegacyPid(actionId, translatePlayerActionOutbound(v113Ack.toByteArray(), dst)));
-                }
-            }
-        }
-        return extras.isEmpty()
-                ? OutboundResult.forward(dimPacket)
-                : OutboundResult.forwardWithExtra(dimPacket, extras);
-    }
-
-    private static byte[] withLegacyPid(int legacyId, byte[] payload) {
-        byte[] packet = new byte[1 + payload.length];
-        packet[0] = (byte) (legacyId & 0xFF);
-        System.arraycopy(payload, 0, packet, 1, payload.length);
-        return packet;
+        out.writeVarInt(safeDim);
+        out.writeVector3(dst, pos[0], pos[1], pos[2]);
+        out.writeBoolean(respawn);
+        return out.toByteArray();
     }
 
     private static int clampDimension(int dimension, LegacyProtocol dst) {
