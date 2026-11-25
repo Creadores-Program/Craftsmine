@@ -350,6 +350,17 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                             );
                         }
                         legacySubs.add(translated.legacyPacket());
+                        // Paquetes legacy sinteticos de completado (p.ej. PlayStatus PLAYER_SPAWN +
+                        // PlayerAction ACK tras ChangeDimension para < 100): mismo batch, mismo orden.
+                        for (byte[] extra : translated.extraLegacyPackets()) {
+                            legacySubs.add(extra);
+                            logger.debug(
+                                    Category.PACKET,
+                                    String.format("OUT [%s | p%d] paquete sintetico de completado 0x%02x (%d bytes)",
+                                            state.getUsername(), targetProto.getProtocol(),
+                                            extra[0] & 0xFF, extra.length)
+                            );
+                        }
                     }
                 } catch (RuntimeException subEx) {
                     metrics.recordDroppedPacket();

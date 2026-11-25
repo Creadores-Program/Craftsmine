@@ -1554,6 +1554,155 @@ class ProtocolBridgeTest {
     }
 
     @Test
+    void alternatesDimensionWhenEndCollapseMatchesClientDimension() {
+        // Bug "Construyendo terreno" infinito: cliente < 100 (sin End) en Overworld recibe un
+        // ChangeDimension del End (2) que clampDimension colapsa a 0, la misma dimension en la
+        // que ya esta -> el cliente ignora el cambio y se bloquea. Se debe alternar a la otra
+        // dimension valida (Nether 1) para forzar la recarga del mundo (MySoft Player.php:1727-1729
+        // solo expone 0/1 bajo protocolo 100; Nukkit-MOT Player.java:9376-9397 envia End real 2).
+        LegacyStream chDimEndV113 = LegacyStream.writer(32);
+        chDimEndV113.writeByte(ProtocolInfo_v113.CHANGE_DIMENSION_PACKET & 0xFF);
+        chDimEndV113.writeVarInt(2); // The End
+        chDimEndV113.writeVector3(LegacyProtocol.PROTOCOL_113, 100f, 64f, 100f);
+        chDimEndV113.writeBoolean(false);
+
+        LegacyStream chDimOverworldV113 = LegacyStream.writer(32);
+        chDimOverworldV113.writeByte(ProtocolInfo_v113.CHANGE_DIMENSION_PACKET & 0xFF);
+        chDimOverworldV113.writeVarInt(0); // Overworld
+        chDimOverworldV113.writeVector3(LegacyProtocol.PROTOCOL_113, 0f, 64f, 0f);
+        chDimOverworldV113.writeBoolean(false);
+
+        // 1) 0.15.x (84) en Overworld: entrar al End alterna a Nether (1) y actualiza el estado
+        SessionProtocolRegistry registry = new SessionProtocolRegistry();
+        SessionProtocolRegistry.LegacySessionState state84 =
+                registry.registerOrUpdate(new DummyChannelId("dim-end-84"), null, 84, "Jugador");
+        state84.setClientDimension(0);
+
+        PacketTranslator.OutboundResult end84 = PacketTranslator.translateOutbound(
+                chDimEndV113.toByteArray(), LegacyProtocol.PROTOCOL_84, true, registry, state84);
+        LegacyStream end84r = LegacyStream.reader(end84.legacyPacket());
+        assertEquals(0x36, end84r.readByte());
+        assertEquals(1, end84r.readByte()); // End colapsa a 0 == dimension actual -> alterna a 1
+        assertFalse(end84r.readBoolean());
+        assertEquals(1, state84.getClientDimension());
+
+        // 2) Volver del End al Overworld (0 != 1): sin alternancia
+        PacketTranslator.OutboundResult back84 = PacketTranslator.translateOutbound(
+                chDimOverworldV113.toByteArray(), LegacyProtocol.PROTOCOL_84, true, registry, state84);
+        LegacyStream back84r = LegacyStream.reader(back84.legacyPacket());
+        assertEquals(0x36, back84r.readByte());
+        assertEquals(0, back84r.readByte());
+        assertFalse(back84r.readBoolean());
+        assertEquals(0, state84.getClientDimension());
+
+        // 3) 0.16 (91) en Overworld: mismo comportamiento de alternancia con layout VarInt+Vector3
+        SessionProtocolRegistry.LegacySessionState state91 =
+                registry.registerOrUpdate(new DummyChannelId("dim-end-91"), null, 91, "Jugador");
+        state91.setClientDimension(0);
+        PacketTranslator.OutboundResult end91 = PacketTranslator.translateOutbound(
+                chDimEndV113.toByteArray(), LegacyProtocol.PROTOCOL_91, false, registry, state91);
+        LegacyStream end91r = LegacyStream.reader(end91.legacyPacket());
+        assertEquals(0x3c, end91r.readByte());
+        assertEquals(1, end91r.readVarInt());
+        assertEquals(1, state91.getClientDimension());
+
+        // 4) Nether (1) -> End: colapsa a 0 != 1, no alterna
+        state91.setClientDimension(1);
+        PacketTranslator.OutboundResult fromNether91 = PacketTranslator.translateOutbound(
+                chDimEndV113.toByteArray(), LegacyProtocol.PROTOCOL_91, false, registry, state91);
+        LegacyStream fromNether91r = LegacyStream.reader(fromNether91.legacyPacket());
+        assertEquals(0x3c, fromNether91r.readByte());
+        assertEquals(0, fromNether91r.readVarInt());
+        assertEquals(0, state91.getClientDimension());
+
+        // 5) 1.1.0 (110, con End): la dimension 2 pasa intacta y el estado se rastrea sin alternar
+        SessionProtocolRegistry.LegacySessionState state110 =
+                registry.registerOrUpdate(new DummyChannelId("dim-end-110"), null, 110, "Jugador");
+        state110.setClientDimension(0);
+        PacketTranslator.OutboundResult end110 = PacketTranslator.translateOutbound(
+                chDimEndV113.toByteArray(), LegacyProtocol.PROTOCOL_110, false, registry, state110);
+        LegacyStream end110r = LegacyStream.reader(end110.legacyPacket());
+        assertEquals(0x3d, end110r.readByte());
+        assertEquals(2, end110r.readVarInt());
+        end110r.readVector3(LegacyProtocol.PROTOCOL_110);
+        assertFalse(end110r.readBoolean());
+        assertEquals(2, state110.getClientDimension());
+    }
+
+    @Test
+    void synthesizesCompletionSequenceAfterChangeDimensionForProtocolsWithoutEnd() {
+        // Ronda 2: el cliente 0.15.x/0.16.x no cierra "Construyendo terreno" tras ChangeDimension
+        // sin senal de completado. Referencias: GenisysPro Player.php:914-924 envia PlayStatus
+        // PLAYER_SPAWN inmediatamente despues de ChangeDimensionPacket; Nukkit-Retro Player.java
+        // 4774-4801 lo programa tras el cambio; MySoft Player.php:1246-1253 envia PlayerAction
+        // ACTION_DIMENSION_CHANGE_ACK (14). Nukkit-MOT no envia ninguna (hasSpawnChunks sin reset,
+        // Player.java:341/1688-1690). Para < 100 se sintetizan ambas; >= 100 queda intacto.
+        LegacyStream chDimV113 = LegacyStream.writer(32);
+        chDimV113.writeByte(ProtocolInfo_v113.CHANGE_DIMENSION_PACKET & 0xFF);
+        chDimV113.writeVarInt(2); // The End
+        chDimV113.writeVector3(LegacyProtocol.PROTOCOL_113, 100f, 64f, 100f);
+        chDimV113.writeBoolean(false);
+
+        // 1) 0.15.x (84) con estado: ChangeDimension + PlayStatus(3) + PlayerAction ACK(14)
+        SessionProtocolRegistry registry = new SessionProtocolRegistry();
+        SessionProtocolRegistry.LegacySessionState state84 =
+                registry.registerOrUpdate(new DummyChannelId("dim-complete-84"), null, 84, "Jugador");
+        state84.setClientDimension(0);
+        state84.setPlayerEntityId(55L);
+
+        PacketTranslator.OutboundResult dim84 = PacketTranslator.translateOutbound(
+                chDimV113.toByteArray(), LegacyProtocol.PROTOCOL_84, true, registry, state84);
+        assertFalse(dim84.suppress());
+        assertEquals(2, dim84.extraLegacyPackets().size(), "0.15 debe recibir PlayStatus + ACK");
+
+        LegacyStream dim84r = LegacyStream.reader(dim84.legacyPacket());
+        assertEquals(0x36, dim84r.readByte());
+        assertEquals(1, dim84r.readByte()); // End colapsa a 0 == actual -> alterna a 1
+        assertFalse(dim84r.readBoolean());
+
+        LegacyStream status84 = LegacyStream.reader(dim84.extraLegacyPackets().get(0));
+        assertEquals(0x02, status84.readByte());
+        assertEquals(3, status84.readIntBE()); // PlayStatusPacket.PLAYER_SPAWN
+
+        LegacyStream ack84 = LegacyStream.reader(dim84.extraLegacyPackets().get(1));
+        assertEquals(0x20, ack84.readByte()); // pid legacy PLAYER_ACTION en V0_15
+        assertEquals(55L, ack84.readEntityRuntimeId(LegacyProtocol.PROTOCOL_84));
+        assertEquals(14, ack84.readIntBE()); // ACTION_DIMENSION_CHANGE_ACK
+        int[] ackPos84 = ack84.readBlockPosition(LegacyProtocol.PROTOCOL_84);
+        assertEquals(100, ackPos84[0]);
+        assertEquals(64, ackPos84[1]);
+        assertEquals(100, ackPos84[2]);
+        assertEquals(0, ack84.readIntBE());
+
+        // 2) 0.16 (91) con estado: mismo par de extras (pid 0x24 y layout VarLong/VarInt)
+        SessionProtocolRegistry.LegacySessionState state91 =
+                registry.registerOrUpdate(new DummyChannelId("dim-complete-91"), null, 91, "Jugador");
+        state91.setClientDimension(0);
+        state91.setPlayerEntityId(88L);
+        PacketTranslator.OutboundResult dim91 = PacketTranslator.translateOutbound(
+                chDimV113.toByteArray(), LegacyProtocol.PROTOCOL_91, false, registry, state91);
+        assertEquals(2, dim91.extraLegacyPackets().size());
+        LegacyStream status91 = LegacyStream.reader(dim91.extraLegacyPackets().get(0));
+        assertEquals(0x02, status91.readByte());
+        assertEquals(3, status91.readIntBE());
+        LegacyStream ack91 = LegacyStream.reader(dim91.extraLegacyPackets().get(1));
+        assertEquals(0x24, ack91.readByte());
+        assertEquals(88L, ack91.readEntityRuntimeId(LegacyProtocol.PROTOCOL_91));
+        assertEquals(14, ack91.readVarInt());
+        ack91.readBlockPosition(LegacyProtocol.PROTOCOL_91);
+        assertEquals(0, ack91.readVarInt());
+
+        // 3) 1.1.0 (110, con End): NINGUN extra, el flujo nativo P113 queda intacto
+        SessionProtocolRegistry.LegacySessionState state110 =
+                registry.registerOrUpdate(new DummyChannelId("dim-complete-110"), null, 110, "Jugador");
+        state110.setClientDimension(0);
+        state110.setPlayerEntityId(55L);
+        PacketTranslator.OutboundResult dim110 = PacketTranslator.translateOutbound(
+                chDimV113.toByteArray(), LegacyProtocol.PROTOCOL_110, false, registry, state110);
+        assertTrue(dim110.extraLegacyPackets().isEmpty(), ">= 100 no debe recibir extras");
+    }
+
+    @Test
     void translatesPlayerActionShiftSneakAcrossLegacyProtocols() {
         // MySoft PacketPool.php:429-442: el protocolo 90 no tiene tabla propia y resuelve hacia
         // abajo hasta PacketsIds81, donde PLAYER_ACTION_PACKET = 0x20 (PacketsIds81.php:57).
