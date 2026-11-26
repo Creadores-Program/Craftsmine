@@ -211,9 +211,6 @@ public final class LegacyContentMapper {
                     m = (m == 2) ? 1 : 0;
                 }
                 case 169 -> { id = 89; m = 0; }    // SEA_LANTERN -> GLOWSTONE
-                case 246 -> { id = 49; m = 0; }    // GLOWING_OBSIDIAN -> OBSIDIAN
-                case 247 -> { id = 42; m = 0; }    // NETHER_REACTOR -> IRON_BLOCK
-                case 251 -> m = Math.min(5, m);    // OBSERVER facing clamp
                 default -> {
                 }
             }
@@ -484,7 +481,7 @@ public final class LegacyContentMapper {
                 || (blockId >= 200 && blockId <= 217) || blockId == 240 || blockId == 252)) {
             return false;
         }
-        if (dst.isBefore90() && (blockId == 138 || blockId == 168 || blockId == 169 || blockId == 246 || blockId == 247)) {
+        if (dst.isBefore90() && (blockId == 138 || blockId == 168 || blockId == 169)) {
             return false;
         }
         if (meta >= 0) {
@@ -510,7 +507,7 @@ public final class LegacyContentMapper {
     private static boolean isCreativeBlockSupported(int blockId, int meta, LegacyProtocol dst) {
         // (MySoft creative_items/81 no lo incluye, igual que el portal del Nether 90), pero si puede
         // fluir por chunks/updates, por lo que NO se excluye del mapeo de bloques; solo del creativo.
-        if (blockId == 0 || blockId == 255 || blockId == 250 || blockId == 119 || blockId == 209 || blockId == 246 || blockId == 248 || blockId == 249) {
+        if (blockId == 0 || blockId == 255 || blockId == 250 || blockId == 119 || blockId == 209 || blockId == 248 || blockId == 249) {
             return false;
         }
         if (blockId == 84 || blockId == 160 || blockId == 166 || blockId == 176 || blockId == 177 || blockId == 190 || blockId == 191 || blockId == 192
@@ -545,7 +542,7 @@ public final class LegacyContentMapper {
             }
         }
         if (dst.isBefore90()) {
-            if (blockId == 138 || blockId == 168 || blockId == 169 || blockId == 247) {
+            if (blockId == 138 || blockId == 168 || blockId == 169) {
                 return false;
             }
         }
