@@ -1,5 +1,5 @@
 name: CraftsmineNKM
-main: com.craftsmine.nkm.CraftsmineNKMPlugin
+main: org.CreadoresProgram.Craftsmine.CraftsmineNKMPlugin
 version: "${project.version}"
 api: ["1.0.0"]
 load: STARTUP
