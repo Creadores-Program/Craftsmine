@@ -31,6 +31,7 @@ public final class RakNetBridgeHook {
 
     private static final String ACCEPTOR_HOOK_NAME = "craftsmine-raknet-acceptor";
     private static final String PRE_INIT_HOOK_NAME = "craftsmine-pre-init";
+    private static final int[] LEGACY_SUPPORTED_RAK_VERSIONS_V6_V7 = new int[]{6, 7, 8, 9, 10, 11};
     private static final int[] LEGACY_SUPPORTED_RAK_VERSIONS = new int[]{7, 8, 9, 10, 11};
     private static final int[] DEFAULT_RAK_VERSIONS = new int[]{8, 9, 10, 11};
 
@@ -80,12 +81,16 @@ public final class RakNetBridgeHook {
     }
 
     private boolean attachToServerChannel(Channel serverChannel, String label) {
-        if (config.isEnableRakNetV7()) {
+        if (config.isEnableRakNetV6() || config.isEnableRakNetV7()) {
             try {
-                serverChannel.config().setOption(RakChannelOption.RAK_SUPPORTED_PROTOCOLS, LEGACY_SUPPORTED_RAK_VERSIONS);
+                int[] versions = config.isEnableRakNetV6()
+                        ? LEGACY_SUPPORTED_RAK_VERSIONS_V6_V7
+                        : LEGACY_SUPPORTED_RAK_VERSIONS;
+                serverChannel.config().setOption(RakChannelOption.RAK_SUPPORTED_PROTOCOLS, versions);
                 logger.info(
                         Category.SYSTEM,
-                        "RakNet " + label + " habilitado para versiones {7, 8, 9, 10, 11} (soporte 0.15.0+)"
+                        "RakNet " + label + " habilitado para versiones "
+                                + (config.isEnableRakNetV6() ? "{6, 7, 8, 9, 10, 11} (soporte 0.14.0+)" : "{7, 8, 9, 10, 11} (soporte 0.15.0+)")
                 );
             } catch (Throwable t) {
                 logger.warn(Category.SYSTEM, "No se pudo actualizar RAK_SUPPORTED_PROTOCOLS en " + label + ": " + t.getMessage());

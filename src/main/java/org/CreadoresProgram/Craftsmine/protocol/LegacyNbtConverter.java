@@ -23,6 +23,13 @@ public final class LegacyNbtConverter {
 
     private static final int MAX_DEPTH = 48;
 
+    private static final Set<String> SUPPORTED_TILES_PRE_80 = Set.of(
+            "Chest", "Sign", "Furnace", "MobSpawner", "FlowerPot",
+            "BrewingStand", "EnchantTable", "Cauldron", "Hopper",
+            "Dropper", "Dispenser", "DaylightDetector", "Comparator",
+            "ItemFrame", "Skull", "Music"
+    );
+
     private static final Set<String> SUPPORTED_TILES_PRE_90 = Set.of(
             "Chest", "Sign", "Furnace", "MobSpawner", "FlowerPot",
             "BrewingStand", "EnchantTable", "Cauldron", "Hopper",
@@ -178,7 +185,11 @@ public final class LegacyNbtConverter {
             return null;
         }
 
-        if (dst.isBefore90()) {
+        if (dst.isBefore80()) {
+            if (!SUPPORTED_TILES_PRE_80.contains(tileId)) {
+                return null;
+            }
+        } else if (dst.isBefore90()) {
             if (!SUPPORTED_TILES_PRE_90.contains(tileId)) {
                 return null;
             }

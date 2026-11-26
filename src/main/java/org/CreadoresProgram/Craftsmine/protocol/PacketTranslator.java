@@ -19,7 +19,7 @@ import org.CreadoresProgram.Craftsmine.network.SessionProtocolRegistry.LegacySes
 import org.CreadoresProgram.Craftsmine.network.SessionProtocolRegistry.SkinSnapshot;
 
 /**
- * Traductor de paquetes bidireccional entre los protocolos legados 80-112 y el protocolo canonico
+ * Traductor de paquetes bidireccional entre los protocolos legados 41-112 y el protocolo canonico
  * 113 (v1_1_0) de Nukkit-MOT, con parches completos de entidades, bloques, items, NBT, skins y sonidos.
  */
 public final class PacketTranslator {
@@ -66,6 +66,9 @@ public final class PacketTranslator {
             return null;
         }
         int pid = rawPacket[0] & 0xFF;
+        if (pid == 0x8F) {
+            return tryNormalizePre80Login(rawPacket, minAllowed, maxAllowed);
+        }
         if (pid != (ProtocolInfo_v113.LOGIN_PACKET & 0xFF)) {
             return null;
         }
@@ -274,7 +277,7 @@ public final class PacketTranslator {
             case 0x09 -> translateTextOutbound(payload, target);
             case 0x0a -> translateSetTimeOutbound(payload, target);
             case 0x0b -> translateStartGameOutbound(payload, target, state);
-            case 0x0c -> translateAddPlayerOutbound(payload, target);
+            case 0x0c -> translateAddPlayerOutbound(payload, target, state);
             // 0x0e (RemoveEntity) y 0x11 (TakeItemEntity) se manejan en el switch superior
             // con traduccion completa (pid + payload) via OutboundResult
             case 0x12 -> translateMoveEntityOutbound(payload, target);
@@ -393,6 +396,56 @@ public final class PacketTranslator {
         LegacyStream in = LegacyStream.reader(payload);
         LegacyStream out = LegacyStream.writer(payload.length + 8);
         int type = in.readByte();
+        if (src.isBefore80()) {
+            switch (type) {
+                case 1 -> { // TYPE_CHAT
+                    out.writeByte(TextPacket.TYPE_CHAT);
+                    out.writeString(LegacyProtocol.PROTOCOL_113, in.readString(src));
+                    out.writeString(LegacyProtocol.PROTOCOL_113, in.readString(src));
+                }
+                case 2 -> { // TYPE_TRANSLATION
+                    out.writeByte(TextPacket.TYPE_TRANSLATION);
+                    out.writeString(LegacyProtocol.PROTOCOL_113, in.readString(src));
+                    int count = in.readByte();
+                    out.writeUnsignedVarInt(count);
+                    for (int i = 0; i < count && in.remaining() > 0; i++) {
+                        out.writeString(LegacyProtocol.PROTOCOL_113, in.readString(src));
+                    }
+                }
+                case 3 -> { // TYPE_POPUP (VeoZax: source+message | Retro: message)
+                    String first = in.readString(src);
+                    String source = "";
+                    String message = first;
+                    if (in.remaining() >= 2) {
+                        source = first;
+                        message = in.readString(src);
+                    }
+                    out.writeByte(TextPacket.TYPE_POPUP);
+                    out.writeString(LegacyProtocol.PROTOCOL_113, message);
+                    if (!source.isEmpty()) {
+                        out.writeUnsignedVarInt(1);
+                        out.writeString(LegacyProtocol.PROTOCOL_113, source);
+                    } else {
+                        out.writeUnsignedVarInt(0);
+                    }
+                }
+                case 4 -> { // 0.14 TYPE_TIP -> v113 TYPE_TIP (5, solo message)
+                    String first = in.readString(src);
+                    String message = in.remaining() >= 2 ? in.readString(src) : first;
+                    out.writeByte(TextPacket.TYPE_TIP);
+                    out.writeString(LegacyProtocol.PROTOCOL_113, message);
+                }
+                case 5 -> { // 0.14 TYPE_SYSTEM -> v113 TYPE_SYSTEM (6)
+                    out.writeByte(TextPacket.TYPE_SYSTEM);
+                    out.writeString(LegacyProtocol.PROTOCOL_113, in.readString(src));
+                }
+                default -> { // TYPE_RAW (0) u otros
+                    out.writeByte(type);
+                    out.writeString(LegacyProtocol.PROTOCOL_113, in.readString(src));
+                }
+            }
+            return out.toByteArray();
+        }
         out.writeByte(type);
         switch (type) {
             case 1, 7, 8 -> {
@@ -432,6 +485,9 @@ public final class PacketTranslator {
             headYaw = in.readFloatLE();
         }
         int mode = in.readByte();
+        if (src.isBefore80() && mode == 2) {
+            mode = 3; // 0.14 MODE_ROTATION (2) -> v113 MODE_PITCH (3)
+        }
         boolean onGround = in.readBoolean();
         long ridingEid = !src.isBefore110() ? in.readEntityRuntimeId(src) : 0L;
         int teleportCause = 0;
@@ -462,6 +518,13 @@ public final class PacketTranslator {
         }
         LegacyStream in = LegacyStream.reader(payload);
         LegacyStream out = LegacyStream.writer(16);
+        if (src.isBefore80() && payload.length == 12) {
+            int x = in.readIntBE();
+            int y = in.readIntBE();
+            int z = in.readIntBE();
+            out.writeBlockPosition(LegacyProtocol.PROTOCOL_113, x, y, z);
+            return out.toByteArray();
+        }
         in.readEntityRuntimeId(src);
         int x = in.readIntBE();
         int z = in.readIntBE();
@@ -479,7 +542,12 @@ public final class PacketTranslator {
         int face = src.isBefore90() ? (byte) in.readByte() : in.readVarInt();
         float[] clickPos = in.readVector3(src);
         float[] playerPos = in.readVector3(src);
-        int slot = src.isBefore90() ? in.readIntBE() : in.readVarInt();
+        int slot;
+        if (src.isBefore80()) {
+            slot = canReadPre80SlotAfterInt(in) ? in.readIntBE() : 0;
+        } else {
+            slot = src.isBefore90() ? in.readIntBE() : in.readVarInt();
+        }
         LegacyStream.LegacySlot item = in.readSlot(src);
 
         out.writeBlockPosition(LegacyProtocol.PROTOCOL_113, bp[0], bp[1], bp[2]);
@@ -640,7 +708,7 @@ public final class PacketTranslator {
         LegacyStream out = LegacyStream.writer(64);
         int windowId = in.readByte();
         int type = src.isBefore90() ? in.readIntBE() : in.readVarInt();
-        UUID uuid = in.readUUID();
+        UUID uuid = in.readUUID(src);
         int inCount = src.isBefore90() ? in.readIntBE() : in.readUnsignedVarInt();
         out.writeByte(windowId);
         out.writeVarInt(type);
@@ -688,8 +756,14 @@ public final class PacketTranslator {
         LegacyStream out = LegacyStream.writer(12);
         out.writeFloatLE(in.readFloatBE());
         out.writeFloatLE(in.readFloatBE());
-        out.writeBoolean(in.readBoolean());
-        out.writeBoolean(in.readBoolean());
+        if (src.isBefore80() && in.remaining() == 1) {
+            int flags = in.readByte();
+            out.writeBoolean((flags & 0x80) != 0);
+            out.writeBoolean((flags & 0x40) != 0);
+        } else {
+            out.writeBoolean(in.readBoolean());
+            out.writeBoolean(in.readBoolean());
+        }
         return out.toByteArray();
     }
 
@@ -793,6 +867,62 @@ public final class PacketTranslator {
         LegacyStream in = LegacyStream.reader(payload);
         LegacyStream out = LegacyStream.writer(payload.length + 8);
         int type = in.readByte();
+        if (dst.isBefore80()) {
+            // 0.14.x: TYPE_RAW=0, CHAT=1, TRANSLATION=2, POPUP=3 (source+msg), TIP->POPUP(3), SYSTEM=5
+            switch (type) {
+                case 0 -> {
+                    out.writeByte(0);
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                }
+                case 1 -> {
+                    out.writeByte(1);
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                }
+                case 2 -> {
+                    out.writeByte(2);
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                    int count = Math.min(255, in.readUnsignedVarInt());
+                    out.writeByte(count);
+                    for (int i = 0; i < count && in.remaining() > 0; i++) {
+                        out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                    }
+                }
+                case 3, 4 -> { // POPUP / JUKEBOX_POPUP -> 0.14 POPUP (3)
+                    String message = in.readString(LegacyProtocol.PROTOCOL_113);
+                    int pCount = in.remaining() > 0 ? Math.min(255, in.readUnsignedVarInt()) : 0;
+                    String title = "";
+                    for (int i = 0; i < pCount && in.remaining() > 0; i++) {
+                        String param = in.readString(LegacyProtocol.PROTOCOL_113);
+                        if (i == 0 && type == 3) {
+                            title = param;
+                        }
+                    }
+                    out.writeByte(3);
+                    out.writeString(dst, title);
+                    out.writeString(dst, message);
+                }
+                case 5 -> { // v113 TYPE_TIP -> 0.14 TYPE_POPUP (3)
+                    out.writeByte(3);
+                    out.writeString(dst, "");
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                }
+                case 7, 8 -> { // WHISPER / ANNOUNCEMENT -> 0.14 TYPE_SYSTEM (5) sin source
+                    in.readString(LegacyProtocol.PROTOCOL_113);
+                    out.writeByte(TEXT_TYPE_SYSTEM_LEGACY_WIRE);
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                }
+                case 6 -> { // v113 TYPE_SYSTEM (6) -> 0.14 TYPE_SYSTEM (5)
+                    out.writeByte(TEXT_TYPE_SYSTEM_LEGACY_WIRE);
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                }
+                default -> {
+                    out.writeByte(0);
+                    out.writeString(dst, in.readString(LegacyProtocol.PROTOCOL_113));
+                }
+            }
+            return out.toByteArray();
+        }
         // < 90 (anterior a 0.16.0): TYPE_WHISPER y TYPE_ANNOUNCEMENT se degradan a TYPE_SYSTEM
         // (solo message, sin source). La regla < 113 para TYPE_ANNOUNCEMENT queda subsumida:
         // todo destino < 90 tambien es < 113.
@@ -934,12 +1064,18 @@ public final class PacketTranslator {
         return out.toByteArray();
     }
 
-    private static byte[] translateAddPlayerOutbound(byte[] payload, LegacyProtocol dst) {
+    private static byte[] translateAddPlayerOutbound(byte[] payload, LegacyProtocol dst, LegacySessionState state) {
         LegacyStream in = LegacyStream.reader(payload);
         UUID uuid = in.readUUID();
         String username = in.readString(LegacyProtocol.PROTOCOL_113);
         long eidUnique = in.readEntityUniqueId(LegacyProtocol.PROTOCOL_113);
         long eidRuntime = in.readEntityRuntimeId(LegacyProtocol.PROTOCOL_113);
+        if (dst.isBefore80() && state != null) {
+            state.trackPlayerUuid(eidRuntime, uuid);
+            if (eidUnique != eidRuntime) {
+                state.trackPlayerUuid(eidUnique, uuid);
+            }
+        }
         float[] pos = in.readVector3(LegacyProtocol.PROTOCOL_113);
         float[] motion = in.readVector3(LegacyProtocol.PROTOCOL_113);
         float pitch = in.readFloatLE();
@@ -949,7 +1085,7 @@ public final class PacketTranslator {
         byte[] metadata = LegacyContentMapper.translateMetadataOutbound(in, dst);
 
         LegacyStream out = LegacyStream.writer(128);
-        out.writeUUID(uuid);
+        out.writeUUID(dst, uuid);
         out.writeString(dst, username);
         if (!dst.isBefore90()) {
             out.writeEntityUniqueId(dst, eidUnique);
@@ -1072,8 +1208,19 @@ public final class PacketTranslator {
         long eid = dst.isBefore90()
                 ? in.readUnsignedVarLong()
                 : in.readEntityUniqueId(LegacyProtocol.PROTOCOL_113);
+        UUID playerUuid = null;
         if (state != null) {
             state.removeEntity(eid);
+            if (dst.isBefore80()) {
+                playerUuid = state.removePlayerUuid(eid);
+            }
+        }
+        if (dst.isBefore80() && playerUuid != null) {
+            LegacyStream out = LegacyStream.writer(28);
+            out.writeByte(0x97); // RemovePlayerPacket en 0.14.x
+            out.writeEntityUniqueId(dst, eid);
+            out.writeUUID(dst, playerUuid);
+            return OutboundResult.forward(out.toByteArray());
         }
         LegacyStream out = LegacyStream.writer(12);
         out.writeByte(legacyId & 0xFF);
@@ -1138,7 +1285,17 @@ public final class PacketTranslator {
         int headYaw = in.readByte();
         int flags = in.remaining() > 0 ? in.readByte() : 0;
 
-        LegacyStream out = LegacyStream.writer(24);
+        LegacyStream out = LegacyStream.writer(40);
+        if (dst.isBefore80()) {
+            // 0.14.x: intBE(count=1) + eid + pos BE + floatBE yaw, headYaw, pitch (en grados)
+            out.writeIntBE(1);
+            out.writeEntityRuntimeId(dst, eid);
+            out.writeVector3(dst, pos[0], pos[1], pos[2]);
+            out.writeFloatBE((yaw & 0xFF) * (360.0f / 256.0f));
+            out.writeFloatBE((headYaw & 0xFF) * (360.0f / 256.0f));
+            out.writeFloatBE((pitch & 0xFF) * (360.0f / 256.0f));
+            return out.toByteArray();
+        }
         out.writeEntityRuntimeId(dst, eid);
         out.writeVector3(dst, pos[0], pos[1], pos[2]);
         if (dst.isBefore90()) {
@@ -1191,7 +1348,12 @@ public final class PacketTranslator {
             out.writeFloatLE(yaw);
             out.writeFloatLE(headYaw);
         }
-        out.writeByte(mode);
+        int wireMode = dst.isBefore80() ? switch (mode) {
+            case 2 -> 1; // TELEPORT -> MODE_RESET (0.14.x)
+            case 3 -> 2; // PITCH -> MODE_ROTATION (0.14.x)
+            default -> mode;
+        } : mode;
+        out.writeByte(wireMode);
         out.writeBoolean(onGround);
         if (!dst.isBefore110()) {
             out.writeEntityRuntimeId(dst, ridingEid);
@@ -1217,6 +1379,9 @@ public final class PacketTranslator {
 
         LegacyStream out = LegacyStream.writer(16);
         if (dst.isBefore90()) {
+            if (dst.isBefore80()) {
+                out.writeIntBE(1);
+            }
             out.writeIntBE(bp[0]);
             out.writeIntBE(bp[2]);
             out.writeByte(bp[1]);
@@ -1567,6 +1732,9 @@ public final class PacketTranslator {
             out.writeIntBE(bp[0]);
             out.writeIntBE(bp[1]);
             out.writeIntBE(bp[2]);
+            if (dst.isBefore80() && eid != -1L) {
+                out.writeLongBE(eid);
+            }
         } else {
             out.writeVarInt(legacySlots);
             out.writeBlockPosition(dst, bp[0], bp[1], bp[2]);
@@ -1669,6 +1837,9 @@ public final class PacketTranslator {
                 throw malformed;
             }
         }
+        if (isCreative && dst.isBefore80()) {
+            mappedSlots = LegacyContentMapper.mergeCreativeUnionForPre80(mappedSlots);
+        }
         // Nukkit-MOT envia 45 slots (36 + 9 vacios) en PlayerInventory, pero 0.15.x solo soporta 36 slots en windowId=0
         if (windowId == 0 && dst.isBefore90() && mappedSlots.size() > 36) {
             mappedSlots = new ArrayList<>(mappedSlots.subList(0, 36));
@@ -1756,7 +1927,7 @@ public final class PacketTranslator {
                         }
                         entry.writeSlot(dst, mapped);
                     }
-                    entry.writeUUID(in.remaining() >= 16 ? in.readUUID() : new UUID(0L, 0L));
+                    entry.writeUUID(dst, in.remaining() >= 16 ? in.readUUID() : new UUID(0L, 0L));
                 }
                 case 1 -> { // ENTRY_SHAPED
                     int width = in.readVarInt();
@@ -1791,7 +1962,7 @@ public final class PacketTranslator {
                         }
                         entry.writeSlot(dst, mapped);
                     }
-                    entry.writeUUID(in.remaining() >= 16 ? in.readUUID() : new UUID(0L, 0L));
+                    entry.writeUUID(dst, in.remaining() >= 16 ? in.readUUID() : new UUID(0L, 0L));
                 }
                 case 2 -> { // ENTRY_FURNACE
                     int inputId = in.readVarInt();
@@ -1823,7 +1994,7 @@ public final class PacketTranslator {
                     }
                     entry.writeSlot(dst, mappedRes);
                 }
-                case 4 -> entry.writeUUID(in.remaining() >= 16 ? in.readUUID() : new UUID(0L, 0L));
+                case 4 -> entry.writeUUID(dst, in.remaining() >= 16 ? in.readUUID() : new UUID(0L, 0L));
                 default -> {
                     in.position(in.position() + in.remaining());
                     unsupported = true;
@@ -2041,7 +2212,7 @@ public final class PacketTranslator {
         }
         for (int i = 0; i < count && in.remaining() >= 16; i++) {
             UUID uuid = in.readUUID();
-            out.writeUUID(uuid);
+            out.writeUUID(dst, uuid);
             if (type == 0) {
                 long eid = in.readEntityUniqueId(LegacyProtocol.PROTOCOL_113);
                 String name = in.readString(LegacyProtocol.PROTOCOL_113);
@@ -2269,6 +2440,154 @@ public final class PacketTranslator {
                 return null;
             }
         }
+    }
+
+    private static LoginSniffResult tryNormalizePre80Login(byte[] rawPacket, int minAllowed, int maxAllowed) {
+        LegacyStream in = LegacyStream.reader(rawPacket, 1, rawPacket.length - 1);
+        String username = in.readString(LegacyProtocol.PROTOCOL_41);
+        if (in.remaining() < 4) {
+            return null;
+        }
+        int proto = in.readIntBE();
+        if (in.remaining() >= 4) {
+            int proto2 = in.readIntBE();
+            if (proto == 0 && proto2 != 0) {
+                proto = proto2;
+            }
+        }
+        if (proto >= 80 || proto < minAllowed || proto > maxAllowed) {
+            return null;
+        }
+        LegacyProtocol source = LegacyProtocol.resolve(proto);
+        long clientId = in.remaining() >= 8 ? in.readLongBE() : 0L;
+        UUID clientUuid = in.remaining() >= 16
+                ? in.readUUID(LegacyProtocol.PROTOCOL_41)
+                : UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
+        String serverAddress = in.remaining() >= 2 ? in.readString(LegacyProtocol.PROTOCOL_41) : "127.0.0.1:19132";
+        if (in.remaining() >= 2) {
+            in.readString(LegacyProtocol.PROTOCOL_41); // clientSecret (sin uso en v113)
+        }
+        String skinName = in.remaining() >= 2 ? in.readString(LegacyProtocol.PROTOCOL_41) : "Standard_Custom";
+        byte[] rawSkin = readPre80SkinBytes(in);
+        byte[] safeSkin = LegacyContentMapper.normalizeSkinData(rawSkin, LegacyProtocol.PROTOCOL_113);
+        String safeUsername = (username == null || username.isBlank()) ? "Jugador" : username;
+        String safeSkinId = (skinName == null || skinName.isBlank()) ? "Standard_Custom" : skinName;
+
+        StringBuilder chainPayload = new StringBuilder(192);
+        chainPayload.append("{\"extraData\":{\"displayName\":");
+        appendJsonStringLiteral(chainPayload, safeUsername);
+        chainPayload.append(",\"identity\":");
+        appendJsonStringLiteral(chainPayload, clientUuid.toString());
+        chainPayload.append(",\"XUID\":\"\"}}");
+        String chainJwt = buildUnpaddedBase64Jwt(chainPayload.toString());
+        byte[] chainWrapper = ("{\"chain\":[\"" + chainJwt + "\"]}").getBytes(StandardCharsets.UTF_8);
+
+        String skinB64 = java.util.Base64.getEncoder().encodeToString(safeSkin);
+        StringBuilder skinPayload = new StringBuilder(skinB64.length() + 192);
+        skinPayload.append("{\"ClientRandomId\":").append(clientId)
+                .append(",\"ServerAddress\":");
+        appendJsonStringLiteral(skinPayload, serverAddress == null ? "127.0.0.1:19132" : serverAddress);
+        skinPayload.append(",\"GameVersion\":");
+        appendJsonStringLiteral(skinPayload, source.getMcVersion());
+        skinPayload.append(",\"SkinId\":");
+        appendJsonStringLiteral(skinPayload, safeSkinId);
+        skinPayload.append(",\"SkinData\":\"").append(skinB64).append("\"}");
+        byte[] skinJwt = buildUnpaddedBase64Jwt(skinPayload.toString()).getBytes(StandardCharsets.UTF_8);
+
+        LegacyStream conn = LegacyStream.writer(chainWrapper.length + skinJwt.length + 12);
+        conn.writeIntLE(chainWrapper.length);
+        conn.writeBytes(chainWrapper);
+        conn.writeIntLE(skinJwt.length);
+        conn.writeBytes(skinJwt);
+        byte[] connectionPayload = conn.toByteArray();
+
+        LegacyStream out = LegacyStream.writer(connectionPayload.length + 16);
+        out.writeByte(ProtocolInfo_v113.LOGIN_PACKET & 0xFF);
+        out.writeIntBE(LegacyProtocol.CANONICAL_NUKKIT_PROTOCOL);
+        out.writeByte(0); // gameEdition
+        out.writeByteArray(LegacyProtocol.PROTOCOL_113, connectionPayload);
+        return new LoginSniffResult(proto, safeUsername, out.toByteArray());
+    }
+
+    private static byte[] readPre80SkinBytes(LegacyStream in) {
+        int rem = in.remaining();
+        if (rem <= 0) {
+            return new byte[0];
+        }
+        if (rem == 8192 || rem == 16384) {
+            return in.readBytes(rem);
+        }
+        if (rem >= 2) {
+            int len = in.readShortBE() & 0xFFFF;
+            if (len <= in.remaining()) {
+                return in.readBytes(len);
+            }
+            return in.readRemaining();
+        }
+        return in.readRemaining();
+    }
+
+    private static boolean canReadPre80SlotAfterInt(LegacyStream in) {
+        int rem = in.remaining();
+        if (rem < 6) {
+            return false;
+        }
+        int pos = in.position();
+        try {
+            int candidateSlot = in.readIntBE();
+            if (candidateSlot < -1 || candidateSlot > 44) {
+                return false;
+            }
+            int idAfter = (short) in.readShortBE();
+            if (idAfter <= 0) {
+                return rem == 6;
+            }
+            return rem >= 11 && idAfter <= 512;
+        } finally {
+            in.position(pos);
+        }
+    }
+
+    private static String buildUnpaddedBase64Jwt(String jsonPayload) {
+        String header = "{\"alg\":\"none\"}"; // 14 bytes (14 % 3 == 2 -> añadir 1 espacio = 15B)
+        byte[] paddedHeader = (header + " ").getBytes(StandardCharsets.UTF_8);
+        StringBuilder paddedJson = new StringBuilder(jsonPayload);
+        int mod = paddedJson.toString().getBytes(StandardCharsets.UTF_8).length % 3;
+        if (mod != 0) {
+            for (int i = 0; i < 3 - mod; i++) {
+                paddedJson.append(' ');
+            }
+        }
+        java.util.Base64.Encoder enc = java.util.Base64.getEncoder().withoutPadding();
+        return enc.encodeToString(paddedHeader) + "."
+                + enc.encodeToString(paddedJson.toString().getBytes(StandardCharsets.UTF_8)) + ".AA";
+    }
+
+    private static void appendJsonStringLiteral(StringBuilder sb, String value) {
+        sb.append('"');
+        if (value != null) {
+            for (int i = 0; i < value.length(); i++) {
+                char c = value.charAt(i);
+                switch (c) {
+                    case '"' -> sb.append("\\\"");
+                    case '\\' -> sb.append("\\\\");
+                    case '\b' -> sb.append("\\b");
+                    case '\f' -> sb.append("\\f");
+                    case '\n' -> sb.append("\\n");
+                    case '\r' -> sb.append("\\r");
+                    case '\t' -> sb.append("\\t");
+                    default -> {
+                        // Escapar <, >, ?, ~ y >= 0x80 para evitar '+' '/' '=' al codificar Base64/Base64URL
+                        if (c < 0x20 || c >= 0x7F || c == '<' || c == '>' || c == '?' || c == '~') {
+                            sb.append(String.format(Locale.ROOT, "\\u%04x", (int) c));
+                        } else {
+                            sb.append(c);
+                        }
+                    }
+                }
+            }
+        }
+        sb.append('"');
     }
 
     private static String extractDisplayNameFromJson(String json) {

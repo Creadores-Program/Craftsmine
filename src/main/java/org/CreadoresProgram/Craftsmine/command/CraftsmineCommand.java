@@ -67,6 +67,7 @@ public final class CraftsmineCommand extends Command {
                 sender.sendMessage(TextFormat.GOLD + "=== CraftsmineNKM v" + plugin.getDescription().getVersion() + " ===");
                 sender.sendMessage(TextFormat.GRAY + "Rango puente: " + TextFormat.GREEN + config.getMinProtocol() + " - " + config.getMaxProtocol()
                         + TextFormat.GRAY + " | Debug: " + (config.isDebug() ? TextFormat.GREEN + "ON" : TextFormat.RED + "OFF")
+                        + TextFormat.GRAY + " | RakNet v6: " + (config.isEnableRakNetV6() ? TextFormat.GREEN + "ON" : TextFormat.RED + "OFF")
                         + TextFormat.GRAY + " | RakNet v7: " + (config.isEnableRakNetV7() ? TextFormat.GREEN + "ON" : TextFormat.RED + "OFF"));
                 sender.sendMessage(TextFormat.AQUA + snap.formatSummary());
             }
@@ -105,7 +106,7 @@ public final class CraftsmineCommand extends Command {
                 }
             }
             case "protocols" -> {
-                sender.sendMessage(TextFormat.GOLD + "=== Protocolos soportados por CraftsmineNKM (80 - 113) ===");
+                sender.sendMessage(TextFormat.GOLD + "=== Protocolos soportados por CraftsmineNKM (41 - 113) ===");
                 for (LegacyProtocol lp : LegacyProtocol.all()) {
                     sender.sendMessage(TextFormat.GREEN + "p" + lp.getProtocol() + TextFormat.GRAY + " -> MCPE "
                             + lp.getMcVersion() + " | RakNet v" + lp.getRakNetVersion() + " | " + lp.getFamily().name());
@@ -115,7 +116,7 @@ public final class CraftsmineCommand extends Command {
                 Collection<LegacySessionState> sessions = registry.getActiveSessions();
                 sender.sendMessage(TextFormat.GOLD + "=== Sesiones legadas activas (" + sessions.size() + ") ===");
                 if (sessions.isEmpty()) {
-                    sender.sendMessage(TextFormat.GRAY + "No hay clientes legados (80-112) conectados.");
+                    sender.sendMessage(TextFormat.GRAY + "No hay clientes legados (41-112) conectados.");
                 } else {
                     for (LegacySessionState s : sessions) {
                         sender.sendMessage(TextFormat.AQUA + s.getUsername() + TextFormat.GRAY + " | proto=" + s.getRawProtocol()
@@ -134,7 +135,7 @@ public final class CraftsmineCommand extends Command {
         sender.sendMessage(TextFormat.YELLOW + "/craftsmine debug <on|off>" + TextFormat.GRAY + " - Activa/desactiva debug en config.yml");
         sender.sendMessage(TextFormat.YELLOW + "/craftsmine reload" + TextFormat.GRAY + " - Recarga config.yml y archivo de logs");
         sender.sendMessage(TextFormat.YELLOW + "/craftsmine logs [n]" + TextFormat.GRAY + " - Muestra ultimas N trazas en tiempo real");
-        sender.sendMessage(TextFormat.YELLOW + "/craftsmine protocols" + TextFormat.GRAY + " - Lista completa 80..113");
+        sender.sendMessage(TextFormat.YELLOW + "/craftsmine protocols" + TextFormat.GRAY + " - Lista completa 41..113");
         sender.sendMessage(TextFormat.YELLOW + "/craftsmine sessions" + TextFormat.GRAY + " - Clientes legados conectados");
     }
 }

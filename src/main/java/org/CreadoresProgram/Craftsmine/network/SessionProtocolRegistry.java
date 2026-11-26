@@ -40,6 +40,7 @@ public final class SessionProtocolRegistry {
         private volatile long playerEntityId = -1L;
         private final long connectedAtMillis;
         private final Map<Long, EntitySpawnInfo> spawnedEntities = new ConcurrentHashMap<>();
+        private final Map<Long, UUID> trackedPlayerUuids = new ConcurrentHashMap<>();
 
         public LegacySessionState(ChannelId channelId, SocketAddress remoteAddress, int rawProtocol) {
             this.channelId = channelId;
@@ -123,8 +124,27 @@ public final class SessionProtocolRegistry {
             spawnedEntities.remove(eid);
         }
 
+        public void trackPlayerUuid(long eid, UUID uuid) {
+            if (uuid == null) {
+                return;
+            }
+            if (trackedPlayerUuids.size() > 4096) {
+                trackedPlayerUuids.clear();
+            }
+            trackedPlayerUuids.put(eid, uuid);
+        }
+
+        public UUID getPlayerUuid(long eid) {
+            return trackedPlayerUuids.get(eid);
+        }
+
+        public UUID removePlayerUuid(long eid) {
+            return trackedPlayerUuids.remove(eid);
+        }
+
         public void clearEntities() {
             spawnedEntities.clear();
+            trackedPlayerUuids.clear();
         }
     }
 

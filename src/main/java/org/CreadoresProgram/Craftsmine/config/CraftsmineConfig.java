@@ -10,6 +10,7 @@ public final class CraftsmineConfig {
     private volatile boolean debug;
     private volatile int minProtocol;
     private volatile int maxProtocol;
+    private volatile boolean enableRakNetV6;
     private volatile boolean enableRakNetV7;
     private volatile boolean autoBypassResourcePacks015;
     private volatile boolean suppressUnknownPackets;
@@ -45,11 +46,12 @@ public final class CraftsmineConfig {
 
         this.debug = cfg.getBoolean("debug", false);
 
-        this.minProtocol = Math.max(80, cfg.getInt("protocols.min-protocol", 80));
+        this.minProtocol = Math.max(41, cfg.getInt("protocols.min-protocol", 41));
         this.maxProtocol = Math.min(113, cfg.getInt("protocols.max-protocol", 113));
         if (this.maxProtocol < this.minProtocol) {
             this.maxProtocol = this.minProtocol;
         }
+        this.enableRakNetV6 = cfg.getBoolean("protocols.enable-raknet-v6", true);
         this.enableRakNetV7 = cfg.getBoolean("protocols.enable-raknet-v7", true);
         this.autoBypassResourcePacks015 = cfg.getBoolean("protocols.auto-bypass-resource-packs-015", true);
         this.suppressUnknownPackets = cfg.getBoolean("protocols.suppress-unknown-packets", true);
@@ -91,6 +93,10 @@ public final class CraftsmineConfig {
 
     public int getMaxProtocol() {
         return maxProtocol;
+    }
+
+    public boolean isEnableRakNetV6() {
+        return enableRakNetV6;
     }
 
     public boolean isEnableRakNetV7() {

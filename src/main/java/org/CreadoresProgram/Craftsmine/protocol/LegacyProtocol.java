@@ -10,6 +10,14 @@ import java.util.List;
  */
 public enum LegacyProtocol {
 
+    PROTOCOL_41(41, "0.14.0 beta", 6, Family.V0_14),
+    PROTOCOL_42(42, "0.14.0 beta", 6, Family.V0_14),
+    PROTOCOL_43(43, "0.14.0 beta", 6, Family.V0_14),
+    PROTOCOL_44(44, "0.14.0 beta", 6, Family.V0_14),
+    PROTOCOL_45(45, "0.14.0", 6, Family.V0_14),
+    PROTOCOL_46(46, "0.14.1", 6, Family.V0_14),
+    PROTOCOL_60(60, "0.14.2", 6, Family.V0_14),
+    PROTOCOL_70(70, "0.14.3", 6, Family.V0_14),
     PROTOCOL_80(80, "0.15.0 alpha", 7, Family.V0_15),
     PROTOCOL_81(81, "0.15.0 - 0.15.3", 7, Family.V0_15),
     PROTOCOL_82(82, "0.15.4 - 0.15.8", 7, Family.V0_15),
@@ -30,6 +38,8 @@ public enum LegacyProtocol {
     PROTOCOL_113(113, "1.1.0 - 1.1.7", 8, Family.V1_1_0);
 
     public enum Family {
+        /** 0.14.0 - 0.14.3 (RakNet 6, wrapper 0x8e, batch 0x92, IDs 0x8f..0xcb, UUID BE) */
+        V0_14,
         /** 0.15.0 - 0.15.10 (RakNet 7, sin VarInts, sin ResourcePacks, chunks 128-col) */
         V0_15,
         /** 0.15.90 - 0.17.0 (RakNet 8, VarInts iniciales, IDs v91, chunks order + ARGB) */
@@ -46,7 +56,7 @@ public enum LegacyProtocol {
         V1_1_0
     }
 
-    public static final int MIN_LEGACY_PROTOCOL = 80;
+    public static final int MIN_LEGACY_PROTOCOL = 41;
     public static final int CANONICAL_NUKKIT_PROTOCOL = 113;
 
     private static final List<LegacyProtocol> ALL = Collections.unmodifiableList(Arrays.asList(values()));
@@ -77,6 +87,10 @@ public enum LegacyProtocol {
 
     public Family getFamily() {
         return family;
+    }
+
+    public boolean isBefore80() {
+        return protocol < 80;
     }
 
     public boolean isBefore90() {
@@ -113,6 +127,6 @@ public enum LegacyProtocol {
                 best = candidate;
             }
         }
-        return best != null ? best : PROTOCOL_80;
+        return best != null ? best : PROTOCOL_41;
     }
 }

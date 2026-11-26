@@ -3,7 +3,11 @@ package org.CreadoresProgram.Craftsmine.protocol;
 import cn.nukkit.network.protocol.v113.ProtocolInfo_v113;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import org.CreadoresProgram.Craftsmine.network.SessionProtocolRegistry.EntitySpawnInfo;
 
@@ -29,6 +33,62 @@ public final class LegacyContentMapper {
     public static final int DATA_TYPE_VECTOR3F = 8;
 
     private static final int EVENT_ADD_PARTICLE_MASK = 0x4000;
+
+    /** Union verificada (id << 16 | meta) del inventario creativo 0.14.x: Nukkit-Retro creativeitems60 + VeoZaxAPI creative_items/81 (excluyendo 0.15.0+). */
+    private static final int[] CREATIVE_UNION_PRE_80 = new int[]{
+        0x00010000, 0x00010001, 0x00010002, 0x00010003, 0x00010004, 0x00010005, 0x00010006, 0x00020000, 0x00030000, 0x00040000,
+        0x00050000, 0x00050001, 0x00050002, 0x00050003, 0x00050004, 0x00050005, 0x00060000, 0x00060001, 0x00060002, 0x00060003,
+        0x00060004, 0x00060005, 0x00070000, 0x000C0000, 0x000C0001, 0x000D0000, 0x000E0000, 0x000F0000, 0x00100000, 0x00110000,
+        0x00110001, 0x00110002, 0x00110003, 0x00120000, 0x00120001, 0x00120002, 0x00120003, 0x00130000, 0x00140000, 0x00150000,
+        0x00160000, 0x00170000, 0x00180000, 0x00180001, 0x00180002, 0x00190000, 0x001B0000, 0x001C0000, 0x001E0000, 0x001F0001,
+        0x001F0002, 0x00200000, 0x00230000, 0x00230001, 0x00230002, 0x00230003, 0x00230004, 0x00230005, 0x00230006, 0x00230007,
+        0x00230008, 0x00230009, 0x0023000A, 0x0023000B, 0x0023000C, 0x0023000D, 0x0023000E, 0x0023000F, 0x00250000, 0x00260000,
+        0x00260001, 0x00260002, 0x00260003, 0x00260004, 0x00260005, 0x00260006, 0x00260007, 0x00260008, 0x00270000, 0x00280000,
+        0x00290000, 0x002A0000, 0x002C0000, 0x002C0001, 0x002C0003, 0x002C0004, 0x002C0005, 0x002C0006, 0x002C0007, 0x002D0000,
+        0x002E0000, 0x002F0000, 0x00300000, 0x00310000, 0x00320000, 0x00340000, 0x00350000, 0x00360000, 0x00380000, 0x00390000,
+        0x003A0000, 0x003D0000, 0x00410000, 0x00420000, 0x00430000, 0x00450000, 0x00460000, 0x00480000, 0x00490000, 0x004C0000,
+        0x004D0000, 0x004E0000, 0x004F0000, 0x00500000, 0x00510000, 0x00520000, 0x00550000, 0x00550001, 0x00550002, 0x00550003,
+        0x00550004, 0x00550005, 0x00560000, 0x00570000, 0x00580000, 0x00590000, 0x005B0000, 0x00600000, 0x00620000, 0x00620001,
+        0x00620002, 0x00620003, 0x00630000, 0x0063000E, 0x0063000F, 0x0064000E, 0x00650000, 0x00660000, 0x00670000, 0x006A0000,
+        0x006B0000, 0x006C0000, 0x006D0000, 0x006E0000, 0x006F0000, 0x00700000, 0x00710000, 0x00720000, 0x00740000, 0x00780000,
+        0x00790000, 0x007B0000, 0x007D0000, 0x007E0000, 0x00800000, 0x00810000, 0x00830000, 0x00850000, 0x00860000, 0x00870000,
+        0x00880000, 0x008B0000, 0x008B0001, 0x008F0000, 0x00910000, 0x00910004, 0x00910008, 0x00920000, 0x00930000, 0x00940000,
+        0x00970000, 0x00980000, 0x00990000, 0x009B0000, 0x009B0001, 0x009B0002, 0x009C0000, 0x009E0000, 0x009E0001, 0x009E0002,
+        0x009E0003, 0x009E0004, 0x009E0005, 0x009F0000, 0x009F0001, 0x009F0002, 0x009F0003, 0x009F0004, 0x009F0005, 0x009F0006,
+        0x009F0007, 0x009F0008, 0x009F0009, 0x009F000A, 0x009F000B, 0x009F000C, 0x009F000D, 0x009F000E, 0x009F000F, 0x00A10000,
+        0x00A10001, 0x00A20000, 0x00A20001, 0x00A30000, 0x00A40000, 0x00A50000, 0x00A70000, 0x00AA0000, 0x00AB0000, 0x00AB0001,
+        0x00AB0002, 0x00AB0003, 0x00AB0004, 0x00AB0005, 0x00AB0006, 0x00AB0007, 0x00AB0008, 0x00AB0009, 0x00AB000A, 0x00AB000B,
+        0x00AB000C, 0x00AB000D, 0x00AB000E, 0x00AB000F, 0x00AC0000, 0x00AD0000, 0x00AE0000, 0x00AF0000, 0x00AF0001, 0x00AF0002,
+        0x00AF0003, 0x00AF0004, 0x00AF0005, 0x00B30000, 0x00B30001, 0x00B30002, 0x00B40000, 0x00B60000, 0x00B70000, 0x00B80000,
+        0x00B90000, 0x00BA0000, 0x00BB0000, 0x00F30000, 0x00F50000, 0x01000000, 0x01010000, 0x01020000, 0x01030000, 0x01040000,
+        0x01050000, 0x01060000, 0x01070000, 0x01070001, 0x01080000, 0x01090000, 0x010A0000, 0x010B0000, 0x010C0000, 0x010D0000,
+        0x010E0000, 0x010F0000, 0x01100000, 0x01110000, 0x01120000, 0x01130000, 0x01140000, 0x01150000, 0x01160000, 0x01170000,
+        0x01180000, 0x01190000, 0x011A0000, 0x011B0000, 0x011C0000, 0x011D0000, 0x011E0000, 0x011F0000, 0x01200000, 0x01210000,
+        0x01220000, 0x01230000, 0x01240000, 0x01250000, 0x01260000, 0x01270000, 0x01280000, 0x01290000, 0x012A0000, 0x012B0000,
+        0x012C0000, 0x012D0000, 0x012E0000, 0x012F0000, 0x01300000, 0x01310000, 0x01320000, 0x01330000, 0x01340000, 0x01350000,
+        0x01360000, 0x01370000, 0x01380000, 0x01390000, 0x013A0000, 0x013B0000, 0x013C0000, 0x013D0000, 0x013E0000, 0x013F0000,
+        0x01400000, 0x01410000, 0x01420000, 0x01430000, 0x01440000, 0x01450000, 0x01450001, 0x01450008, 0x0145000A, 0x01480000,
+        0x01490000, 0x014A0000, 0x014B0000, 0x014C0000, 0x014D0000, 0x014D0001, 0x014D0002, 0x014D0003, 0x014D0004, 0x014D0005,
+        0x014E0000, 0x01510000, 0x01520000, 0x01530000, 0x01540000, 0x01550000, 0x01560000, 0x01580000, 0x01590000, 0x015A0000,
+        0x015B0000, 0x015C0000, 0x015D0000, 0x015D0001, 0x015D0002, 0x015D0003, 0x015E0000, 0x015E0001, 0x015F0000, 0x015F0001,
+        0x015F0002, 0x015F0003, 0x015F0004, 0x015F0005, 0x015F0006, 0x015F0007, 0x015F0008, 0x015F0009, 0x015F000A, 0x015F000B,
+        0x015F000C, 0x015F000D, 0x015F000E, 0x015F000F, 0x01600000, 0x01610000, 0x01620000, 0x01630000, 0x01640000, 0x01650000,
+        0x01670000, 0x01680000, 0x01690000, 0x016A0000, 0x016B0000, 0x016C0000, 0x016D0000, 0x016E0000, 0x016F0000, 0x01710000,
+        0x01720000, 0x01730000, 0x01740000, 0x01750000, 0x01750001, 0x01750002, 0x01750003, 0x01750004, 0x01750005, 0x01750006,
+        0x01750007, 0x01750008, 0x01750009, 0x0175000A, 0x0175000B, 0x0175000C, 0x0175000D, 0x0175000E, 0x0175000F, 0x01750010,
+        0x01750011, 0x01750012, 0x01750013, 0x01750014, 0x01750015, 0x01750016, 0x01750017, 0x01750018, 0x01750019, 0x0175001A,
+        0x0175001B, 0x0175001C, 0x0175001D, 0x0175001E, 0x0175001F, 0x01750020, 0x01750021, 0x01750022, 0x01750023, 0x01760000,
+        0x01770000, 0x01780000, 0x01790000, 0x017A0000, 0x017B0000, 0x017C0000, 0x017E0000, 0x017F000A, 0x017F000B, 0x017F000C,
+        0x017F000D, 0x017F000E, 0x017F000F, 0x017F0010, 0x017F0011, 0x017F0012, 0x017F0013, 0x017F0016, 0x017F0020, 0x017F0021,
+        0x017F0022, 0x017F0023, 0x017F0024, 0x017F0025, 0x017F0026, 0x017F0027, 0x017F0028, 0x017F0029, 0x017F002A, 0x017F002B,
+        0x017F002D, 0x01800000, 0x01840000, 0x01850000, 0x01860000, 0x01870000, 0x01880000, 0x01890000, 0x018A0000, 0x018C0000,
+        0x018D0000, 0x018D0001, 0x018D0002, 0x018D0003, 0x018D0004, 0x01900000, 0x01940000, 0x01960000, 0x01970000, 0x01980000,
+        0x019A0000, 0x019B0000, 0x019C0000, 0x019D0000, 0x019E0000, 0x01AB0000, 0x01AC0000, 0x01AD0000, 0x01AE0000, 0x01AF0000,
+        0x01B60005, 0x01B60006, 0x01B60007, 0x01B60008, 0x01B60009, 0x01B6000A, 0x01B6000B, 0x01B6000C, 0x01B6000D, 0x01B6000E,
+        0x01B6000F, 0x01B60010, 0x01B60011, 0x01B60012, 0x01B60013, 0x01B60014, 0x01B60015, 0x01B60016, 0x01B60017, 0x01B60018,
+        0x01B60019, 0x01B6001A, 0x01B6001B, 0x01B6001C, 0x01B6001D, 0x01B6001E, 0x01B6001F, 0x01B60020, 0x01B60021, 0x01B60022,
+        0x01B60023, 0x01C90000, 0x01CA0000, 0x01CC0001, 0x01CD0002, 0x01CE0003, 0x01CF0001, 0x01D20000
+    };
 
     private LegacyContentMapper() {
     }
@@ -215,6 +275,16 @@ public final class LegacyContentMapper {
                 default -> {
                 }
             }
+            // Bloques de 0.15.0+ (Pistones 29/33/34, Observador 251) no existen en 0.14.x (< 80)
+            if (dst.isBefore80()) {
+                switch (id) {
+                    case 29, 33 -> { id = 4; m = 0; }  // PISTON / STICKY_PISTON -> COBBLESTONE
+                    case 34 -> { id = 0; m = 0; }      // PISTON_HEAD -> AIR
+                    case 251 -> { id = 4; m = 0; }     // OBSERVER -> COBBLESTONE
+                    default -> {
+                    }
+                }
+            }
             // Sanitizar metadata de bloques antiguos para evitar crash de renderer en 0.15.x
             if (id == 3 && m > 2) {
                 m = 0;
@@ -368,6 +438,15 @@ public final class LegacyContentMapper {
             }
         }
 
+        if (dst.isBefore80()) {
+            // Items exclusivos de 0.15.0+: Tipped Arrows (262:1+), Fire Charge (385), Carrot on a Stick (398),
+            // Horse Armors (416..419), Lead (420), Name Tag (421), Mutton Raw/Cooked (423, 424)
+            if ((id == 262 && meta > 0) || id == 385 || id == 398
+                    || (id >= 416 && id <= 421) || id == 423 || id == 424) {
+                return creativeMode ? null : LegacyStream.LegacySlot.AIR;
+            }
+        }
+
         // Spawn Eggs (383): eliminar en creativo y convertir a AIR en inventario si el mob no existe nativamente en dst.
         // El icono del egg se renderiza en el cliente mientras la entidad exista en esa version,
         // asi que el gating por lista vanilla creativa NO aplica aqui (0.15.10 no crashea con eggs extra).
@@ -485,6 +564,9 @@ public final class LegacyContentMapper {
         if (dst.isBefore90() && (blockId == 138 || blockId == 168 || blockId == 169)) {
             return false;
         }
+        if (dst.isBefore80() && (blockId == 29 || blockId == 33 || blockId == 34 || blockId == 251)) {
+            return false;
+        }
         if (meta >= 0) {
             if ((blockId == 24 || blockId == 155 || blockId == 179) && meta > 2) {
                 return false;
@@ -547,7 +629,37 @@ public final class LegacyContentMapper {
                 return false;
             }
         }
+        if (dst.isBefore80()) {
+            if (blockId == 29 || blockId == 33 || blockId == 34 || blockId == 251) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    /**
+     * Completa el inventario creativo enviado a clientes 0.14.x (< 80) con la union de items validos
+     * presentes en Nukkit-Retro creativeitems60.json y VeoZaxAPI creative_items/81/creativeitems.json.
+     */
+    public static List<LegacyStream.LegacySlot> mergeCreativeUnionForPre80(List<LegacyStream.LegacySlot> currentSlots) {
+        List<LegacyStream.LegacySlot> merged = new ArrayList<>(Math.max(currentSlots.size(), CREATIVE_UNION_PRE_80.length));
+        Set<Integer> seen = new HashSet<>(Math.max(64, currentSlots.size() * 2));
+        for (LegacyStream.LegacySlot slot : currentSlots) {
+            if (slot == null || slot.id() <= 0) {
+                continue;
+            }
+            int safeMeta = slot.meta() < 0 ? 0 : (slot.meta() & 0xFFFF);
+            merged.add(slot);
+            seen.add(((slot.id() & 0xFFFF) << 16) | safeMeta);
+        }
+        for (int key : CREATIVE_UNION_PRE_80) {
+            if (seen.add(key)) {
+                int id = (key >>> 16) & 0xFFFF;
+                int meta = key & 0xFFFF;
+                merged.add(new LegacyStream.LegacySlot(id, meta, 1, new byte[0], new String[0], new String[0]));
+            }
+        }
+        return merged;
     }
 
     private static byte[] sanitizeItemNbtForSlot(byte[] nbt, LegacyProtocol dst) {
@@ -629,6 +741,16 @@ public final class LegacyContentMapper {
             }
         }
 
+        // 5) Entidades de 0.15.0+ -> reemplazo equivalente para < 80 (0.14.x)
+        if (dst.isBefore80()) {
+            mapped = switch (mapped) {
+                case 23, 24, 25 -> 11; // Horse, Donkey, Mule -> Cow
+                case 26, 46, 48 -> 34; // SkeletonHorse, Stray, WitherSkeleton -> Skeleton
+                case 27, 47 -> 32;     // ZombieHorse, Husk -> Zombie
+                default -> mapped;
+            };
+        }
+
         // Verificacion estricta de IDs validos conocidos en <= 1.1
         return switch (mapped) {
             case 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
@@ -662,7 +784,7 @@ public final class LegacyContentMapper {
             case "minecraft:knockback_resistance", "generic.knockbackResistance" -> "generic.knockbackResistance";
             case "minecraft:follow_range", "generic.followRange" -> "generic.followRange";
             case "minecraft:attack_damage", "generic.attackDamage" -> "generic.attackDamage";
-            case "minecraft:horse.jump_strength", "horse.jumpStrength" -> "horse.jumpStrength";
+            case "minecraft:horse.jump_strength", "horse.jumpStrength" -> dst.isBefore80() ? null : "horse.jumpStrength";
             case "minecraft:zombie.spawn_reinforcements", "zombie.spawnReinforcements" -> "zombie.spawnReinforcements";
             default -> null;
         };
@@ -736,7 +858,7 @@ public final class LegacyContentMapper {
                     out.writeByte((DATA_TYPE_BYTE << 5) | 21); // DATA_IN_LOVE
                     out.writeByte(1);
                 }
-                if ((flags & (1L << 30)) != 0) { // DATA_FLAG_LEASHED (v113 bit 30)
+                if (!dst.isBefore80() && (flags & (1L << 30)) != 0) { // DATA_FLAG_LEASHED (v113 bit 30, 0.15+)
                     out.writeByte((DATA_TYPE_BYTE << 5) | 24); // DATA_LEAD
                     out.writeByte(1);
                 }
@@ -808,8 +930,10 @@ public final class LegacyContentMapper {
                 }
                 case 38 -> { // DATA_LEAD_HOLDER_EID (v113 wire key 38 long -> 0.15 key 23 long)
                     long holder = (type == DATA_TYPE_LONG) ? in.readVarLong() : readMetaAsInt(in, type);
-                    out.writeByte((DATA_TYPE_LONG << 5) | 23);
-                    out.writeLongLE(holder);
+                    if (!dst.isBefore80()) {
+                        out.writeByte((DATA_TYPE_LONG << 5) | 23);
+                        out.writeLongLE(holder);
+                    }
                 }
                 default -> skipMetaValue(in, type);
             }

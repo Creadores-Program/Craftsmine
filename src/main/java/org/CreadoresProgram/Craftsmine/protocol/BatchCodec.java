@@ -157,6 +157,12 @@ public final class BatchCodec {
         int pid = body[0] & 0xFF;
 
         if (knownProto != null) {
+            if (knownProto.isBefore80()) {
+                if (pid == 0x92) {
+                    return decodeExplicitBatch06(body, true, maxBytes);
+                }
+                return List.of(body);
+            }
             if (knownProto.isBefore90()) {
                 if (pid == 0x06) {
                     return decodeExplicitBatch06(body, true, maxBytes);
@@ -178,8 +184,11 @@ public final class BatchCodec {
         }
 
         // Pre-login (knownProto == null)
-        if (pid == 0x01) {
+        if (pid == 0x01 || pid == 0x8f) {
             return List.of(body);
+        }
+        if (pid == 0x92) {
+            return decodeExplicitBatch06(body, true, maxBytes);
         }
         if (pid == 0x06) {
             boolean preferPre90 = rakNetVersion <= 7;
@@ -275,6 +284,21 @@ public final class BatchCodec {
      * Construye el payload completo (despues del byte 0xfe de RakNet) para un cliente destino.
      */
     public static byte[] encodeRakNetBatchBody(LegacyProtocol target, List<byte[]> translatedSubPackets, int compressionLevel) {
+        if (target.isBefore80()) {
+            // 0.14.x (< 80): un sub-paquete pequeno (< 256B) va directo tras 0x8e; resto en 0x92 Batch
+            if (translatedSubPackets.size() == 1
+                    && translatedSubPackets.get(0) != null
+                    && translatedSubPackets.get(0).length < 256) {
+                return translatedSubPackets.get(0);
+            }
+            byte[] raw = packSubPackets(translatedSubPackets, true);
+            byte[] compressed = deflateZlib(raw, compressionLevel);
+            LegacyStream out = LegacyStream.writer(compressed.length + 8);
+            out.writeByte(0x92);
+            out.writeIntBE(compressed.length);
+            out.writeBytes(compressed);
+            return out.toByteArray();
+        }
         if (target.isBefore90()) {
             // 0.15.x (< 90): 0x06 + int32BE(compressedLen) + zlib(int32BE(len)+pkt ...)
             byte[] raw = packSubPackets(translatedSubPackets, true);

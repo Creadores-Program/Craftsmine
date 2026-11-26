@@ -38,6 +38,7 @@ public final class PacketIdMapper {
             V113_TO_LEGACY.put(family, fromV113);
         }
 
+        initV014();
         initV015();
         initV016();
         initV100();
@@ -63,6 +64,70 @@ public final class PacketIdMapper {
         map(family, 0x03, ProtocolInfo_v113.SERVER_TO_CLIENT_HANDSHAKE_PACKET);
         map(family, 0x04, ProtocolInfo_v113.CLIENT_TO_SERVER_HANDSHAKE_PACKET);
         map(family, 0x05, ProtocolInfo_v113.DISCONNECT_PACKET);
+    }
+
+    private static void initV014() {
+        LegacyProtocol.Family f = LegacyProtocol.Family.V0_14;
+        map(f, 0x8F, ProtocolInfo_v113.LOGIN_PACKET);
+        map(f, 0x90, ProtocolInfo_v113.PLAY_STATUS_PACKET);
+        map(f, 0x91, ProtocolInfo_v113.DISCONNECT_PACKET);
+        map(f, 0x92, ProtocolInfo_v113.BATCH_PACKET);
+        map(f, 0x93, ProtocolInfo_v113.TEXT_PACKET);
+        map(f, 0x94, ProtocolInfo_v113.SET_TIME_PACKET);
+        map(f, 0x95, ProtocolInfo_v113.START_GAME_PACKET);
+        map(f, 0x96, ProtocolInfo_v113.ADD_PLAYER_PACKET);
+        // 0x97 = RemovePlayerPacket (resuelto dinamicamente en translateRemoveEntityOutbound)
+        map(f, 0x98, ProtocolInfo_v113.ADD_ENTITY_PACKET);
+        map(f, 0x99, ProtocolInfo_v113.REMOVE_ENTITY_PACKET);
+        map(f, 0x9A, ProtocolInfo_v113.ADD_ITEM_ENTITY_PACKET);
+        map(f, 0x9B, ProtocolInfo_v113.TAKE_ITEM_ENTITY_PACKET);
+        map(f, 0x9C, ProtocolInfo_v113.MOVE_ENTITY_PACKET);
+        map(f, 0x9D, ProtocolInfo_v113.MOVE_PLAYER_PACKET);
+        map(f, 0x9E, ProtocolInfo_v113.REMOVE_BLOCK_PACKET);
+        map(f, 0x9F, ProtocolInfo_v113.UPDATE_BLOCK_PACKET);
+        map(f, 0xA0, ProtocolInfo_v113.ADD_PAINTING_PACKET);
+        map(f, 0xA1, ProtocolInfo_v113.EXPLODE_PACKET);
+        map(f, 0xA2, ProtocolInfo_v113.LEVEL_EVENT_PACKET);
+        map(f, 0xA3, ProtocolInfo_v113.BLOCK_EVENT_PACKET);
+        map(f, 0xA4, ProtocolInfo_v113.ENTITY_EVENT_PACKET);
+        map(f, 0xA5, ProtocolInfo_v113.MOB_EFFECT_PACKET);
+        map(f, 0xA6, ProtocolInfo_v113.UPDATE_ATTRIBUTES_PACKET);
+        map(f, 0xA7, ProtocolInfo_v113.MOB_EQUIPMENT_PACKET);
+        map(f, 0xA8, ProtocolInfo_v113.MOB_ARMOR_EQUIPMENT_PACKET);
+        map(f, 0xA9, ProtocolInfo_v113.INTERACT_PACKET);
+        map(f, 0xAA, ProtocolInfo_v113.USE_ITEM_PACKET);
+        map(f, 0xAB, ProtocolInfo_v113.PLAYER_ACTION_PACKET);
+        map(f, 0xAC, ProtocolInfo_v113.HURT_ARMOR_PACKET);
+        map(f, 0xAD, ProtocolInfo_v113.SET_ENTITY_DATA_PACKET);
+        map(f, 0xAE, ProtocolInfo_v113.SET_ENTITY_MOTION_PACKET);
+        map(f, 0xAF, ProtocolInfo_v113.SET_ENTITY_LINK_PACKET);
+        map(f, 0xB0, ProtocolInfo_v113.SET_HEALTH_PACKET);
+        map(f, 0xB1, ProtocolInfo_v113.SET_SPAWN_POSITION_PACKET);
+        map(f, 0xB2, ProtocolInfo_v113.ANIMATE_PACKET);
+        map(f, 0xB3, ProtocolInfo_v113.RESPAWN_PACKET);
+        map(f, 0xB4, ProtocolInfo_v113.DROP_ITEM_PACKET);
+        map(f, 0xB5, ProtocolInfo_v113.CONTAINER_OPEN_PACKET);
+        map(f, 0xB6, ProtocolInfo_v113.CONTAINER_CLOSE_PACKET);
+        map(f, 0xB7, ProtocolInfo_v113.CONTAINER_SET_SLOT_PACKET);
+        map(f, 0xB8, ProtocolInfo_v113.CONTAINER_SET_DATA_PACKET);
+        map(f, 0xB9, ProtocolInfo_v113.CONTAINER_SET_CONTENT_PACKET);
+        map(f, 0xBA, ProtocolInfo_v113.CRAFTING_DATA_PACKET);
+        map(f, 0xBB, ProtocolInfo_v113.CRAFTING_EVENT_PACKET);
+        map(f, 0xBC, ProtocolInfo_v113.ADVENTURE_SETTINGS_PACKET);
+        map(f, 0xBD, ProtocolInfo_v113.BLOCK_ENTITY_DATA_PACKET);
+        map(f, 0xBE, ProtocolInfo_v113.PLAYER_INPUT_PACKET);
+        map(f, 0xBF, ProtocolInfo_v113.FULL_CHUNK_DATA_PACKET);
+        map(f, 0xC0, ProtocolInfo_v113.SET_DIFFICULTY_PACKET);
+        map(f, 0xC1, ProtocolInfo_v113.CHANGE_DIMENSION_PACKET);
+        map(f, 0xC2, ProtocolInfo_v113.SET_PLAYER_GAME_TYPE_PACKET);
+        map(f, 0xC3, ProtocolInfo_v113.PLAYER_LIST_PACKET);
+        map(f, 0xC5, ProtocolInfo_v113.SPAWN_EXPERIENCE_ORB_PACKET);
+        map(f, 0xC6, ProtocolInfo_v113.CLIENTBOUND_MAP_ITEM_DATA_PACKET);
+        map(f, 0xC7, ProtocolInfo_v113.MAP_INFO_REQUEST_PACKET);
+        map(f, 0xC8, ProtocolInfo_v113.REQUEST_CHUNK_RADIUS_PACKET);
+        map(f, 0xC9, ProtocolInfo_v113.CHUNK_RADIUS_UPDATED_PACKET);
+        map(f, 0xCA, ProtocolInfo_v113.ITEM_FRAME_DROP_ITEM_PACKET);
+        map(f, 0xCB, ProtocolInfo_v113.REPLACE_ITEM_IN_SLOT_PACKET);
     }
 
     private static void initV015() {

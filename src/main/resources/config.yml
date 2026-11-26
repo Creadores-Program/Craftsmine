@@ -1,17 +1,19 @@
 # ==============================================================================
-# CraftsmineNKM - Nukkit-MOT Legacy Multiversion Bridge (Protocol 80 -> 113)
+# CraftsmineNKM - Nukkit-MOT Legacy Multiversion Bridge (Protocol 41 -> 113)
 # ==============================================================================
 
 # Activa o desactiva el modo Debug en tiempo real para monitoreo detallado de paquetes,
-# chunks, negociacion RakNet 7/8 y tiempos de traduccion.
+# chunks, negociacion RakNet 6/7/8 y tiempos de traduccion.
 debug: false
 
 protocols:
-  # Protocolo minimo permitido (80 = MCPE 0.15.0 alpha, 81 = 0.15.0-0.15.3)
-  min-protocol: 80
+  # Protocolo minimo permitido (41 = MCPE 0.14.0 beta, 70 = 0.14.3, 80 = 0.15.0 alpha)
+  min-protocol: 41
   # Protocolo puente maximo gestionado por CraftsmineNKM (113 = MCPE 1.1.0-1.1.7)
   # Los protocolos >= 114 continuan directo por el nucleo Multiversion de Nukkit-MOT.
   max-protocol: 113
+  # Habilita RakNet Protocol 6 en RakNetInterface para aceptar clientes 0.14.0 - 0.14.3
+  enable-raknet-v6: true
   # Habilita RakNet Protocol 7 en RakNetInterface para aceptar clientes 0.15.0 - 0.15.10
   enable-raknet-v7: true
   # Omite ResourcePacksInfo/ResourcePackStack en clientes < 90 (0.15.x no los soporta)

@@ -4,7 +4,7 @@ version: "${project.version}"
 api: ["1.0.0"]
 load: STARTUP
 author: CraftsmineNKM
-description: "Multiversion legacy protocol bridge for Nukkit-MOT supporting MCPE 0.15.0 (Protocol 80) through 1.1.x (Protocol 113)."
+description: "Multiversion legacy protocol bridge for Nukkit-MOT supporting MCPE 0.14.0 (Protocol 41) through 1.1.x (Protocol 113)."
 
 commands:
   craftsmine:

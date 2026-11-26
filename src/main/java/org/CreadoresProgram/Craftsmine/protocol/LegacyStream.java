@@ -202,6 +202,15 @@ public final class LegacyStream {
         return new UUID(msb, lsb);
     }
 
+    public UUID readUUID(LegacyProtocol protocol) {
+        if (protocol != null && protocol.isBefore80()) {
+            long msb = readLongBE();
+            long lsb = readLongBE();
+            return new UUID(msb, lsb);
+        }
+        return readUUID();
+    }
+
     public long readEntityUniqueId(LegacyProtocol protocol) {
         if (protocol.isBefore90()) {
             return readLongBE();
@@ -424,6 +433,16 @@ public final class LegacyStream {
         UUID u = uuid == null ? new UUID(0L, 0L) : uuid;
         writeLongLE(u.getMostSignificantBits());
         writeLongLE(u.getLeastSignificantBits());
+    }
+
+    public void writeUUID(LegacyProtocol protocol, UUID uuid) {
+        if (protocol != null && protocol.isBefore80()) {
+            UUID u = uuid == null ? new UUID(0L, 0L) : uuid;
+            writeLongBE(u.getMostSignificantBits());
+            writeLongBE(u.getLeastSignificantBits());
+            return;
+        }
+        writeUUID(uuid);
     }
 
     public void writeEntityUniqueId(LegacyProtocol protocol, long eid) {

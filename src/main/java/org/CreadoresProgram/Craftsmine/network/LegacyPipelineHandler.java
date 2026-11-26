@@ -115,7 +115,7 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                 List<byte[]> normalizedSubs = new ArrayList<>(subPackets.size());
 
                 for (byte[] sub : subPackets) {
-                    if (sub.length > 0 && (sub[0] & 0xFF) == 0x01) {
+                    if (sub.length > 0 && ((sub[0] & 0xFF) == 0x01 || (sub[0] & 0xFF) == 0x8f)) {
                         LoginSniffResult sniff = PacketTranslator.tryNormalizeLogin(
                                 sub, config.getMinProtocol(), config.getMaxProtocol()
                         );
@@ -376,7 +376,7 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                     targetProto, legacySubs, config.getCompressionLevel()
             );
             ByteBuf outBuf = ctx.alloc().buffer(1 + legacyBatchBody.length);
-            outBuf.writeByte(0xfe);
+            outBuf.writeByte(targetProto.isBefore80() ? 0x8e : 0xfe);
             outBuf.writeBytes(legacyBatchBody);
 
             metrics.recordOutboundTranslated(System.nanoTime() - startNanos);
