@@ -1084,7 +1084,7 @@ public final class LegacyContentMapper {
         return switch (v113Sound) {
             case 20, 51 -> 1002;           // BOW / SHOOT -> EVENT_SOUND_SHOOT
             case 26, 58, 59 -> 1004;       // FIZZ / EXTINGUISH_FIRE -> EVENT_SOUND_FIZZ
-            case 45 -> 1005;               // EXPLODE -> EVENT_SOUND_TNT
+            case 45 -> 3501;               // EXPLODE -> EVENT_SOUND_EXPLODE (1005 es el de encender TNT)
             case 60, 61 -> 1003;           // CHEST_OPEN/CLOSED -> EVENT_SOUND_DOOR (suave) o 1000 click
             case 38 -> 1031;               // THROW -> EVENT_SOUND_ITEM_THROWN
             case 70, 71 -> 1030;           // POP / DROP_SLOT -> EVENT_SOUND_ITEM_DROP
@@ -1133,7 +1133,7 @@ public final class LegacyContentMapper {
     }
 
     private static int mapNamedSoundToLevelEvent(String name) {
-        if (name.contains("explode")) return 1005;
+        if (name.contains("explode")) return 3501; // EVENT_SOUND_EXPLODE (1005 es el de encender TNT)
         if (name.contains("bow")) return 1002;
         if (name.contains("door")) return 1003;
         if (name.contains("fizz") || name.contains("extinguish")) return 1004;
