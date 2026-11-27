@@ -809,6 +809,18 @@ public final class PacketTranslator {
         LegacyStream in = LegacyStream.reader(payload);
         boolean hideScreen = in.readBoolean();
         String msg = hideScreen ? "" : in.readString(LegacyProtocol.PROTOCOL_113);
+        if (dst.isBefore80()) {
+            // 0.14.x: el cliente real lee DisconnectPacket::read como un unico readString
+            // (libminecraftpe.so 0.14.3: _ZN16DisconnectPacket4readEPN6RakNet9BitStreamE = tail-call
+            // a readString). Coincide con Nukkit-Retro (DisconnectPacket.encode isBefore0160:
+            // putString sin booleano) y con VeoZax p70/p84 (putString sin booleano).
+            // El booleano extra desplazaba la longitud short del string: el cliente 0.14 leia una
+            // longitud 0x0000 y descartaba el mensaje de expulsion, quedandose colgado en
+            // "Localizando servidor" en vez de mostrar el motivo del kick.
+            LegacyStream out14 = LegacyStream.writer(msg.length() + 4);
+            out14.writeString(dst, msg);
+            return out14.toByteArray();
+        }
         LegacyStream out = LegacyStream.writer(msg.length() + 8);
         out.writeBoolean(hideScreen);
         if (!hideScreen) {
@@ -1024,7 +1036,12 @@ public final class PacketTranslator {
             out.writeIntBE(spawn[2]);
             out.writeVector3(dst, pos[0], pos[1], pos[2]);
             out.writeBoolean(hasAchievementsDisabled);
-            out.writeBoolean(false);
+            // 0.14.x (< 80): segundo flag = true como en las referencias probadas con clientes
+            // reales 0.14.3 (Nukkit-Retro StartGamePacket isBefore0160: b1=b2=true, b3=false;
+            // VeoZax p70 StartGamePacket: chr(1) chr(1) chr(0)). El cliente 0.14.3 lo lee y lo
+            // pasa a la inicializacion del nivel (LegacyClientNetworkHandler::handle(StartGamePacket)
+            // 0x3e8708: ldr r8, [r5, #0x30] -> startGame). 0.15.x (80-112) conserva false.
+            out.writeBoolean(dst.isBefore80());
             out.writeBoolean(eduMode);
             out.writeString(dst, levelId);
             return out.toByteArray();
