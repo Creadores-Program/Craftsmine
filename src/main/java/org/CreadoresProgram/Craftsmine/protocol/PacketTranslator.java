@@ -1035,6 +1035,13 @@ public final class PacketTranslator {
             out.writeIntBE(spawn[1]);
             out.writeIntBE(spawn[2]);
             out.writeVector3(dst, pos[0], pos[1], pos[2]);
+            if (dst.getProtocol() < 45) {
+                // 0.14.0 betas (41-44) usan el cierre pre-0.14 (Nukkit-Retro StartGamePacket.encode
+                // isBefore0140: putByte(0) y return; MPMPESCore: "0.13: ...[0] (47 bytes)"):
+                // tras las floats solo va un byte 0, sin flags ni string.
+                out.writeByte(0);
+                return out.toByteArray();
+            }
             out.writeBoolean(hasAchievementsDisabled);
             // 0.14.x (< 80): segundo flag = true como en las referencias probadas con clientes
             // reales 0.14.3 (Nukkit-Retro StartGamePacket isBefore0160: b1=b2=true, b3=false;
