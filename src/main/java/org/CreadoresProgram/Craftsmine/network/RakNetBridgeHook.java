@@ -14,6 +14,7 @@ import org.CreadoresProgram.Craftsmine.logging.CraftsmineLogger;
 import org.CreadoresProgram.Craftsmine.logging.CraftsmineLogger.Category;
 import org.CreadoresProgram.Craftsmine.metrics.PerformanceMetrics;
 import org.cloudburstmc.netty.channel.raknet.config.RakChannelOption;
+import org.cloudburstmc.netty.channel.raknet.config.RakServerCookieMode;
 
 import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
@@ -40,6 +41,7 @@ public final class RakNetBridgeHook {
     private final SessionProtocolRegistry registry;
     private final PerformanceMetrics metrics;
     private final List<Channel> hookedServerChannels = new ArrayList<>();
+    private final Map<Channel, RakServerCookieMode> originalCookieModes = new java.util.IdentityHashMap<>();
 
     public RakNetBridgeHook(
             CraftsmineConfig config,
@@ -95,6 +97,7 @@ public final class RakNetBridgeHook {
             } catch (Throwable t) {
                 logger.warn(Category.SYSTEM, "No se pudo actualizar RAK_SUPPORTED_PROTOCOLS en " + label + ": " + t.getMessage());
             }
+            disableCookieModeForLegacyClients(serverChannel, label);
         }
 
         ChannelPipeline pipeline = serverChannel.pipeline();
@@ -114,6 +117,44 @@ public final class RakNetBridgeHook {
         });
         hookedServerChannels.add(serverChannel);
         return true;
+    }
+
+    /**
+     * Con RakNet cookie mode activo (default de Nukkit-MOT: rak-cookie-mode "active"),
+     * netty-transport-raknet inserta 4 bytes de cookie en OPEN_CONNECTION_REPLY_1 tras el GUID
+     * (RakServerOfflineHandler.onOpenConnectionRequest1: writeLong(guid)+writeBoolean+writeInt(cookie)+
+     * writeShort(mtu) = 32B) y descarta todo OPEN_CONNECTION_REQUEST_2 sin cookie exacta
+     * ("Received ID_OPEN_CONNECTION_REQUEST_2 with invalid cookie"). Los clientes MCPE 0.14.x-1.1.x
+     * (RakNet 6-10, protocolos 41-112) NO implementan cookies: envian REQUEST_2 sin cookie, el servidor
+     * lo descarta silenciosamente y el cliente nunca recibe REPLY_2 -> se queda en "Localizando servidor"
+     * aunque la traduccion de juego sea correcta. Con NONE, REPLY_1 vuelve al formato legado de 28B
+     * ([id][magic][guid][security byte][mtu short]) y REQUEST_2 sin cookie es aceptado (verificado contra
+     * Nukkit-Retro OPEN_CONNECTION_REPLY_1.java:35-45 / OPEN_CONNECTION_REQUEST_2.java:33-41).
+     */
+    private void disableCookieModeForLegacyClients(Channel serverChannel, String label) {
+        try {
+            RakServerCookieMode current = serverChannel.config().getOption(RakChannelOption.RAK_SERVER_COOKIE_MODE);
+            if (shouldForceCookieModeNone(current)) {
+                originalCookieModes.put(serverChannel, current);
+                serverChannel.config().setOption(RakChannelOption.RAK_SERVER_COOKIE_MODE, RakServerCookieMode.NONE);
+                logger.info(
+                        Category.SYSTEM,
+                        "RakNet cookie mode " + current + " -> NONE en " + label
+                                + ": requerido para completar el handshake offline de clientes legado ("
+                                + "REQUEST_2 sin cookie se descarta con mode=" + current + ")"
+                );
+            }
+        } catch (Throwable t) {
+            logger.warn(Category.SYSTEM, "No se pudo ajustar RAK_SERVER_COOKIE_MODE en " + label + ": " + t.getMessage());
+        }
+    }
+
+    /**
+     * Solo se fuerza NONE cuando hay un modo con cookies activo; NONE y null (opcion
+     * no soportada por la build) se respetan.
+     */
+    public static boolean shouldForceCookieModeNone(RakServerCookieMode current) {
+        return current != null && current != RakServerCookieMode.NONE;
     }
 
     private void attachChildPipelineWatcher(Channel child) {
@@ -240,14 +281,20 @@ public final class RakNetBridgeHook {
 
     public void uninstall() {
         for (Channel serverChannel : hookedServerChannels) {
-            if (serverChannel == null || !serverChannel.isOpen()) {
+            if (serverChannel == null) {
                 continue;
             }
             try {
-                if (serverChannel.pipeline().get(ACCEPTOR_HOOK_NAME) != null) {
+                if (serverChannel.isOpen() && serverChannel.pipeline().get(ACCEPTOR_HOOK_NAME) != null) {
                     serverChannel.pipeline().remove(ACCEPTOR_HOOK_NAME);
                 }
-                serverChannel.config().setOption(RakChannelOption.RAK_SUPPORTED_PROTOCOLS, DEFAULT_RAK_VERSIONS);
+                RakServerCookieMode originalCookieMode = originalCookieModes.remove(serverChannel);
+                if (serverChannel.isOpen() && originalCookieMode != null) {
+                    serverChannel.config().setOption(RakChannelOption.RAK_SERVER_COOKIE_MODE, originalCookieMode);
+                }
+                if (serverChannel.isOpen()) {
+                    serverChannel.config().setOption(RakChannelOption.RAK_SUPPORTED_PROTOCOLS, DEFAULT_RAK_VERSIONS);
+                }
             } catch (Throwable ignored) {
             }
         }
