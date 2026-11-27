@@ -197,6 +197,61 @@ class Legacy014PostLoginOutboundTest {
     }
 
     @Test
+    void testStartGamePre014TailP41() throws Exception {
+        // Nukkit-Retro StartGamePacket.encode isBefore0140 (protocolos < 45):
+        // int32 seed, byte dim, int32 gen, int32 mode, long eid, int32 spawn x3,
+        // float x3, putByte(0) y RETURN — sin flags ni string.
+        // MPMPESCore MultiProtocol.php: "StartGamePacket 0.14: ...[1][1][0][string] -> 0.13: ...[0] (47 bytes)".
+        LegacyStream sg = LegacyStream.writer(128);
+        sg.writeVarLong(12345L);
+        sg.writeUnsignedVarLong(12345L);
+        sg.writeVarInt(1);
+        sg.writeFloatLE(128.5f);
+        sg.writeFloatLE(70f);
+        sg.writeFloatLE(-64.25f);
+        sg.writeFloatLE(10f);
+        sg.writeFloatLE(90f);
+        sg.writeVarInt(999);
+        sg.writeVarInt(0);
+        sg.writeVarInt(1);
+        sg.writeVarInt(1);
+        sg.writeVarInt(1);
+        sg.writeVarInt(8);
+        sg.writeUnsignedVarInt(64);
+        sg.writeVarInt(8);
+        sg.writeBoolean(true);
+        sg.writeVarInt(-1);
+        sg.writeBoolean(false);
+        sg.writeFloatLE(0f);
+        sg.writeFloatLE(0f);
+        sg.writeBoolean(true);
+        sg.writeBoolean(false);
+        sg.writeUnsignedVarInt(0);
+        sg.writeString(LegacyProtocol.PROTOCOL_113, "levelid123");
+        sg.writeString(LegacyProtocol.PROTOCOL_113, "World");
+        sg.writeString(LegacyProtocol.PROTOCOL_113, "");
+        List<byte[]> frames = translateFrame(wrapV113Batch(List.of(v113Packet(0x0b, sg.toByteArray()))), LegacyProtocol.PROTOCOL_41);
+        assertEquals(1, frames.size());
+        byte[] out = frames.get(0);
+        assertEquals(0x95, out[0] & 0xFF, "StartGame 0.14.0-beta = 0x95");
+        LegacyStream r = LegacyStream.reader(out, 1, out.length - 1);
+        assertEquals(999, r.readIntBE());
+        assertEquals(0, r.readByte());
+        assertEquals(1, r.readIntBE());
+        assertEquals(1, r.readIntBE());
+        assertEquals(12345L, r.readLongBE());
+        assertEquals(8, r.readIntBE());
+        assertEquals(64, r.readIntBE());
+        assertEquals(8, r.readIntBE());
+        assertEquals(128.5f, r.readFloatBE(), 0.001f);
+        assertEquals(70f, r.readFloatBE(), 0.001f);
+        assertEquals(-64.25f, r.readFloatBE(), 0.001f);
+        assertEquals(0, r.readByte(), "cierre pre-0.14: un unico byte 0 tras las floats");
+        assertTrue(r.eof(), "isBefore0140 no escribe flags ni string: 46 bytes de campos + 1");
+        assertEquals(46, out.length - 1, "pid(1)+45 campos+1 = 47 bytes totales como MPMPESCore");
+    }
+
+    @Test
     void testBatch92RoundtripP70() throws Exception {
         // Batch multi-sub (>= 256B) → 0x92 + int32BE(compLen) + zlib(int32BE(len)+sub...)
         // El cliente 0.14 lo decodifica exactamente asi (VeoZax RakLibInterface / Nukkit-Retro).
