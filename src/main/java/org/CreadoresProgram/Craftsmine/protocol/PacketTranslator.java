@@ -2478,7 +2478,16 @@ public final class PacketTranslator {
         appendJsonStringLiteral(chainPayload, safeUsername);
         chainPayload.append(",\"identity\":");
         appendJsonStringLiteral(chainPayload, clientUuid.toString());
-        chainPayload.append(",\"XUID\":\"\"}}");
+        // "identityPublicKey" en el nodo raiz es obligatorio para Nukkit-MOT:
+        // ChainValidationResult.createLegacyClaims (ChainValidationResult.java:70) lo lee con
+        // childAsType y lanza IllegalStateException("identityPublicKey node is missing") si falta;
+        // ClientChainData lo envuelve en IllegalArgumentException("Invalid JWT") (ClientChainData.java:428-430),
+        // LoginChainVerifier lo reporta como failure y Player expulsa con disconnectionScreen.invalidName
+        // (Player.java:10008-10012) aunque LoginPacket.decodeChainData (leniente) ya extrajo el displayName
+        // que se muestra al desconectar (Player.java:7766). Vacio es seguro: solo se parsea como clave EC en
+        // el cifrado de red (protocolo >= v1_7_0 = 291, Player.isEnableNetworkEncryption) o en el binding
+        // NetherNet, rutas que nunca corren en sesiones RakNet canonizadas a P113.
+        chainPayload.append(",\"XUID\":\"\"},\"identityPublicKey\":\"\"}");
         String chainJwt = buildUnpaddedBase64Jwt(chainPayload.toString());
         byte[] chainWrapper = ("{\"chain\":[\"" + chainJwt + "\"]}").getBytes(StandardCharsets.UTF_8);
 

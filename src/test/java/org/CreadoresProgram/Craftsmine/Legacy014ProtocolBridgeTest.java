@@ -126,6 +126,11 @@ class Legacy014ProtocolBridgeTest {
             JsonObject extraData = chainClaims.getAsJsonObject("extraData");
             assertEquals("Steve<014>", extraData.get("displayName").getAsString());
             assertEquals(uuid.toString(), extraData.get("identity").getAsString());
+            // Nukkit-MOT ChainValidationResult.createLegacyClaims exige "identityPublicKey" como String
+            // en el nodo raiz (childAsType lanza IllegalStateException si falta -> kick invalidName).
+            assertTrue(chainClaims.has("identityPublicKey"));
+            assertTrue(chainClaims.get("identityPublicKey").isJsonPrimitive());
+            assertEquals("", chainClaims.get("identityPublicKey").getAsString());
 
             String skinJwt = new String(skinJwtBytes, StandardCharsets.UTF_8);
             String[] skinParts = skinJwt.split("\\.");
