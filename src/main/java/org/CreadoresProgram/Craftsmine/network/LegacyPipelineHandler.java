@@ -298,10 +298,18 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
         buf.getBytes(readerIdx + 1, compressedV113);
 
         try {
-            byte[] rawV113 = BatchCodec.inflateZlibOrRaw(
-                    compressedV113, 0, compressedV113.length, config.getMaxBatchBytes()
-            );
-            List<byte[]> v113Subs = BatchCodec.unpackSubPackets(rawV113, false);
+            List<byte[]> v113Subs;
+            if (hasZlibHeader(compressedV113)) {
+                byte[] rawV113 = BatchCodec.inflateZlibOrRaw(
+                        compressedV113, 0, compressedV113.length, config.getMaxBatchBytes()
+                );
+                v113Subs = BatchCodec.unpackSubPackets(rawV113, false);
+            } else {
+                // Nukkit-MOT también puede escribir un DataPacket individual como
+                // 0xfe + paquete, sin envolverlo en un batch zlib. No se debe
+                // pasar ese paquete por inflate/unpack.
+                v113Subs = Collections.singletonList(compressedV113);
+            }
             List<byte[]> legacySubs = new ArrayList<>(v113Subs.size());
             LegacyProtocol targetProto = state.getProtocol();
             boolean needSyntheticRpComplete = false;
@@ -398,6 +406,17 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
             ReferenceCountUtil.release(buf);
             promise.tryFailure(ex);
         }
+    }
+
+    private static boolean hasZlibHeader(byte[] data) {
+        if (data == null || data.length < 2) {
+            return false;
+        }
+        int cmf = data[0] & 0xFF;
+        int flg = data[1] & 0xFF;
+        return (cmf & 0x0F) == 8
+                && (cmf >>> 4) <= 7
+                && (((cmf << 8) | flg) % 31) == 0;
     }
 
     @Override
