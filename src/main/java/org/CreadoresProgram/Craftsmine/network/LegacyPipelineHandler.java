@@ -376,7 +376,13 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                     targetProto, legacySubs, config.getCompressionLevel()
             );
             ByteBuf outBuf = ctx.alloc().buffer(1 + legacyBatchBody.length);
-            outBuf.writeByte(targetProto.isBefore80() ? 0x8e : 0xfe);
+            if (targetProto.isBefore80()) {
+                if (targetProto.getProtocol() >= 45) {
+                    outBuf.writeByte(0x8e);
+                }
+            }else{
+                outBuf.writeByte(0xfe);
+            }
             outBuf.writeBytes(legacyBatchBody);
 
             metrics.recordOutboundTranslated(System.nanoTime() - startNanos);
