@@ -1013,6 +1013,29 @@ public final class PacketTranslator {
         int safeDim = clampDimension(dimension, dst);
 
         LegacyStream out = LegacyStream.writer(256);
+        if (dst.isBefore80()) {
+            out.writeIntBE(seed);
+            out.writeByte(safeDim);
+            out.writeIntBE(generator);
+            out.writeIntBE(worldGamemode);
+            out.writeLongBE(entityUniqueId);
+            out.writeIntBE(spawn[0]);
+            out.writeIntBE(spawn[1]);
+            out.writeIntBE(spawn[2]);
+            out.writeVector3(dst, pos[0], pos[1], pos[2]);
+
+            if (dst.getProtocol() < 45) {
+                // Nukkit-Retro StartGamePacket: isBefore0140 termina con un byte.
+                out.writeByte(0);
+            } else {
+                // Formato 0.14.x: b1=true, b2=true, b3=false y unknownstr vacío.
+                out.writeBoolean(true);
+                out.writeBoolean(true);
+                out.writeBoolean(false);
+                out.writeString(dst, "");
+            }
+             return out.toByteArray();
+        }
         if (dst.isBefore90()) {
             out.writeIntBE(seed);
             out.writeByte(safeDim);
