@@ -286,11 +286,11 @@ public final class BatchCodec {
     public static byte[] encodeRakNetBatchBody(LegacyProtocol target, List<byte[]> translatedSubPackets, int compressionLevel) {
         if (target.isBefore80()) {
             // 0.14.x (< 80): un sub-paquete pequeno (< 256B) va directo tras 0x8e; resto en 0x92 Batch
-            if (translatedSubPackets.size() == 1
+            /*if (translatedSubPackets.size() == 1
                     && translatedSubPackets.get(0) != null
                     && translatedSubPackets.get(0).length < 256) {
                 return translatedSubPackets.get(0);
-            }
+            }*/
             byte[] raw = packSubPackets(translatedSubPackets, true);
             byte[] compressed = deflateZlib(raw, compressionLevel);
             LegacyStream out = LegacyStream.writer(compressed.length + 8);
