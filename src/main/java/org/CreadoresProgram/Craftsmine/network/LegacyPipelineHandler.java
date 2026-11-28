@@ -396,7 +396,7 @@ public final class LegacyPipelineHandler extends ChannelDuplexHandler {
                             + ex.getClass().getSimpleName() + ": " + ex.getMessage()
             );
             ReferenceCountUtil.release(buf);
-            promise.trySuccess();
+            promise.tryFailure(ex);
         }
     }
 
